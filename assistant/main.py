@@ -1,5 +1,6 @@
 import ctypes
 import json
+import os
 import queue
 import subprocess
 import sys
@@ -26,6 +27,7 @@ SAMPLE_RATE = 16000
 audio_queue = queue.Queue(maxsize=80)
 history = deque(maxlen=16)
 UI_APP = None
+RELEASE_API = "https://api.github.com/repos/MineBotX/Dimasik-AI/releases/tags/latest"
 
 DEFAULTS = {
     "assistant_name": "Димасик",
@@ -83,6 +85,27 @@ tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
 tts.setProperty("volume", max(0.0, min(1.0, float(CONFIG.get("voice_volume", 1.0)))))
 
 
+
+def mood_for_text(text):
+    value = str(text).lower()
+    if any(x in value for x in ("ошибка", "не удалось", "не получилось", "недоступ")):
+        return ("😟", "Есть затруднение", "#ff8585")
+    if any(x in value for x in ("готово", "отлично", "супер", "успеш", "открываю")):
+        return ("😄", "Рад помочь!", "#65e6ad")
+    if any(x in value for x in ("не знаю", "уточни", "что именно", "повтори")):
+        return ("🤔", "Размышляю", "#ffd27a")
+    if any(x in value for x in ("привет", "здравств", "доброе утро", "добрый вечер")):
+        return ("😊", "Приветствую!", "#65d7ff")
+    return ("🙂", "На связи", "#65d7ff")
+
+
+def read_app_version():
+    try:
+        return (ROOT / "VERSION").read_text(encoding="utf-8").strip() or "dev"
+    except OSError:
+        return "dev"
+
+
 def flush_audio():
     while True:
         try:
@@ -114,6 +137,7 @@ def speak(message):
         return
     print("\n" + ASSISTANT_NAME + ": " + message)
     if UI_APP is not None:
+        UI_APP.set_mood(mood_for_text(message))
         UI_APP.post_message(ASSISTANT_NAME, message)
     flush_audio()
     try:
@@ -347,6 +371,7 @@ class DimasikApp:
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(250, self.initialize)
+        self.root.after(1800, lambda: self.check_updates(silent=True))
 
     def _build(self):
         header = tk.Frame(self.root, bg=self.PANEL, padx=22, pady=18)
@@ -360,6 +385,8 @@ class DimasikApp:
         self.status = tk.Label(header, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
                                font=("Segoe UI", 10, "bold"))
         self.status.pack(side="right", padx=(8, 0))
+        self.mood_label = tk.Label(header, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT, font=("Segoe UI", 11, "bold"))
+        self.mood_label.pack(side="right", padx=18)
         body = tk.Frame(self.root, bg=self.BG, padx=20, pady=16)
         body.pack(fill="both", expand=True)
         self.chat = tk.Text(body, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
@@ -370,6 +397,11 @@ class DimasikApp:
         self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 10, "bold"))
         self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 10, "bold"))
         self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=8, lmargin2=8)
+        hero = tk.Frame(body, bg=self.PANEL, padx=16, pady=12)
+        hero.pack(fill="x", pady=(0, 12))
+        self.avatar = tk.Label(hero, text="🙂", bg=self.PANEL, fg=self.ACCENT, font=("Segoe UI Emoji", 34))
+        self.avatar.pack(side="left", padx=(0, 16))
+        tk.Label(hero, text="Твой помощник всегда рядом", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 13, "bold")).pack(side="left")
         self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
         controls = tk.Frame(body, bg=self.BG)
         controls.pack(fill="x", pady=(12, 0))
@@ -393,11 +425,59 @@ class DimasikApp:
         tk.Button(bottom, text="⚙  Настройки", command=self.open_settings,
                   bg=self.PANEL2, fg=self.TEXT, activebackground="#263653", relief="flat",
                   font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="left", padx=8)
+        self.update_btn = tk.Button(bottom, text="↻  Проверить обновления", command=self.check_updates, bg=self.PANEL2, fg=self.ACCENT, relief="flat", padx=10, pady=10)
+        self.update_btn.pack(side="left", padx=8)
         tk.Button(bottom, text="Очистить чат", command=self.clear_chat,
                   bg=self.PANEL2, fg=self.MUTED, activebackground="#263653", relief="flat",
                   font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="right")
         tk.Label(self.root, text="Работает локально • Vosk + Ollama • Настройки хранятся на этом компьютере",
                  bg=self.BG, fg="#667995", font=("Segoe UI", 8), pady=8).pack()
+
+    def set_mood(self, mood):
+        emoji, label, color = mood
+        def apply():
+            self.mood_label.configure(text=emoji + "  " + label, fg=color)
+            self.avatar.configure(text=emoji, fg=color)
+        self.root.after(0, apply)
+
+    def check_updates(self, silent=False):
+        self.update_btn.configure(state="disabled", text="Проверяю...")
+        threading.Thread(target=self._check_updates_worker, args=(silent,), daemon=True).start()
+
+    def _check_updates_worker(self, silent):
+        try:
+            r = requests.get(RELEASE_API, headers={"Accept": "application/vnd.github+json"}, timeout=12)
+            if r.status_code == 404:
+                result = ("none", "Пока нет опубликованного релиза с обновлением.")
+            else:
+                r.raise_for_status()
+                release = r.json()
+                asset = next((a for a in release.get("assets", []) if a.get("name") == "Dimasik-Windows-GUI-x64.zip"), None)
+                if not asset:
+                    result = ("none", "Архив обновления пока не найден.")
+                elif str(release.get("tag_name")) == read_app_version():
+                    result = ("current", "Установлена последняя версия.")
+                else:
+                    result = ("available", asset.get("browser_download_url", ""))
+        except Exception as exc:
+            result = ("error", str(exc))
+        def finish():
+            self.update_btn.configure(state="normal", text="↻  Проверить обновления")
+            kind, data = result
+            if kind == "available":
+                if messagebox.askyesno("Обновление", "Доступна новая версия Димасика. Установить сейчас? Приложение перезапустится."):
+                    self._start_update(data)
+            elif not silent:
+                messagebox.showinfo("Обновления", data)
+        self.root.after(0, finish)
+
+    def _start_update(self, url):
+        script = ROOT / "update.ps1"
+        if not script.exists():
+            messagebox.showerror("Обновление", "Не найден update.ps1. Скачай новый комплект приложения.")
+            return
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-DownloadUrl", url, "-TargetDir", str(ROOT), "-ProcessId", str(os.getpid())], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        self.close()
 
     def _append(self, who, message, tag):
         self.chat.configure(state="normal")
@@ -439,6 +519,7 @@ class DimasikApp:
             return
         self.entry.delete(0, "end")
         self._append("ТЫ", text, "user")
+        self.set_mood(("🤔", "Обдумываю ответ", "#ffd27a"))
         self.send_btn.configure(state="disabled")
         threading.Thread(target=self._answer_text, args=(text,), daemon=True).start()
 
@@ -460,6 +541,7 @@ class DimasikApp:
         self.running.set()
         self.mic_btn.configure(text="■  Выключить микрофон")
         self.set_status("Слушаю ключевое слово «" + ASSISTANT_NAME + "»")
+        self.set_mood(("👂", "Внимательно слушаю", self.ACCENT))
         self.worker = threading.Thread(target=self._listen_loop, daemon=True)
         self.worker.start()
 
