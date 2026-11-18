@@ -31,6 +31,18 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
 
+      - name: Download Vosk Russian model
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          New-Item -ItemType Directory -Force models | Out-Null
+          Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile "$env:TEMP\vosk-model.zip"
+          Expand-Archive -LiteralPath "$env:TEMP\vosk-model.zip" -DestinationPath models -Force
+          if (!(Test-Path "models/vosk-model-small-ru-0.22/conf/model.conf")) {
+            throw "Vosk model download or extraction failed"
+          }
+
       - name: Build executable
         run: |
           pyinstaller --noconfirm --clean --onedir --console --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all comtypes --collect-all win32com assistant/main.py
@@ -40,10 +52,11 @@ jobs:
         run: |
           Copy-Item config.json dist/Dimasik/config.json -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force dist/Dimasik/models | Out-Null
+          Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
           @"
           Dimasik portable build.
-          First-time setup still requires the Vosk Russian model and Ollama with qwen2.5:3b.
-          Run the normal Install_Dimasik.bat for automatic dependency and model installation.
+          The Russian Vosk speech model is included.
+          Ollama and qwen2.5:3b must be installed/downloaded separately for local AI answers.
           "@ | Set-Content dist/Dimasik/README-FIRST.txt -Encoding utf8
 
       - name: Upload EXE package
