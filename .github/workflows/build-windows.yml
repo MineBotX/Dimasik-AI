@@ -9,6 +9,8 @@ on:
       - "requirements.txt"
       - "requirements-build.txt"
       - "update.ps1"
+      - "install-runtime.ps1"
+      - "Install-Dimasik.bat"
       - ".github/workflows/build-windows.yml"
 
 permissions:
@@ -41,14 +43,19 @@ jobs:
       - name: Build GUI executable
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all comtypes --collect-all win32com assistant/main.py
-      - name: Prepare package
+      - name: Prepare installer package
         shell: pwsh
         run: |
-          $version = $env:GITHUB_SHA
-          Set-Content dist/Dimasik/VERSION $version -Encoding ascii
+          $ErrorActionPreference = "Stop"
+          $package = "package"
+          New-Item -ItemType Directory -Force $package | Out-Null
+          Set-Content dist/Dimasik/VERSION $env:GITHUB_SHA -Encoding ascii
           Copy-Item update.ps1 dist/Dimasik/update.ps1
           Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
-          Compress-Archive -Path dist/Dimasik -DestinationPath Dimasik-Windows-GUI-x64.zip -Force
+          Copy-Item dist/Dimasik (Join-Path $package "Dimasik") -Recurse -Force
+          Copy-Item install-runtime.ps1 $package
+          Copy-Item Install-Dimasik.bat $package
+          Compress-Archive -Path "$package/*" -DestinationPath Dimasik-Windows-GUI-x64.zip -Force
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -61,7 +68,7 @@ jobs:
         with:
           tag_name: latest
           name: Dimasik ${{ github.sha }}
-          body: "Latest automatic update package for Dimasik on Windows x64."
+          body: "Run Install-Dimasik.bat to install Ollama and Qwen automatically."
           files: Dimasik-Windows-GUI-x64.zip
           overwrite_files: true
           make_latest: true
