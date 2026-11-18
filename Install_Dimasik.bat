@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal
 title Установщик Димасика
 set "REPO=https://github.com/MineBotX/Dimasik-AI"
@@ -9,31 +10,43 @@ set "DEST=%LOCALAPPDATA%\Dimasik"
 echo ==========================================
 echo       УСТАНОВКА ГОЛОСОВОГО ДИМАСИКА
 echo ==========================================
-echo Скачиваю последнюю версию с GitHub...
+echo Скачиваю проект с GitHub...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Invoke-WebRequest '%REPO%/archive/refs/heads/main.zip' -OutFile '%ZIP%'"
+if errorlevel 1 goto download_error
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest '%REPO%/archive/refs/heads/main.zip' -OutFile '%ZIP%'"
-if errorlevel 1 (
-  echo Не удалось скачать проект. Проверь подключение к интернету.
-  pause
-  exit /b 1
-)
+if not exist "%ZIP%" goto download_error
+for %%A in ("%ZIP%") do if %%~zA LSS 10000 goto download_error
 
 if exist "%EXTRACT%" rmdir /s /q "%EXTRACT%"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force '%ZIP%' '%EXTRACT%'"
-if errorlevel 1 goto fail
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -Force '%ZIP%' '%EXTRACT%'"
+if errorlevel 1 goto extract_error
+if not exist "%EXTRACT%\Dimasik-AI-main\setup.bat" goto extract_error
 
-if exist "%DEST%" rmdir /s /q "%DEST%"
-mkdir "%DEST%"
+echo Файлы загружены. Подготавливаю установку...
+if not exist "%DEST%" mkdir "%DEST%"
 xcopy "%EXTRACT%\Dimasik-AI-main\*" "%DEST%\" /E /I /Y >nul
-if errorlevel 1 goto fail
+if errorlevel 1 goto copy_error
 
 del "%ZIP%" >nul 2>nul
 rmdir /s /q "%EXTRACT%" >nul 2>nul
-
 call "%DEST%\setup.bat"
 exit /b %errorlevel%
 
-:fail
-echo Ошибка скачивания или распаковки.
+:download_error
+echo.
+echo ОШИБКА: не удалось скачать архив с GitHub.
+echo Проверь интернет и попробуй снова.
+pause
+exit /b 1
+
+:extract_error
+echo.
+echo ОШИБКА: архив поврежден или не распаковался.
+pause
+exit /b 1
+
+:copy_error
+echo.
+echo ОШИБКА: не удалось скопировать файлы проекта.
 pause
 exit /b 1
