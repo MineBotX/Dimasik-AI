@@ -1,19 +1,18 @@
 @echo off
-chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
-title Настройка Димасика
+title Dimasik Setup
 
 echo ==========================================
-echo          НАСТРОЙКА ДИМАСИКА
+echo          DIMASIK SETUP
 echo ==========================================
 
 where py >nul 2>nul
 if errorlevel 1 (
-  echo Python не найден. Устанавливаю Python 3.12 через winget...
+  echo Python 3.12 was not found. Installing with winget...
   where winget >nul 2>nul
   if errorlevel 1 (
-    echo Не найден winget. Установи Python 3.12: https://www.python.org/downloads/
+    echo Install Python 3.12 from https://www.python.org/downloads/
     pause
     exit /b 1
   )
@@ -24,7 +23,7 @@ if errorlevel 1 (
 
 py -3.12 --version
 if errorlevel 1 (
-  echo Python 3.12 не найден в PATH. Перезапусти установщик после установки Python.
+  echo Python 3.12 is not available. Restart Windows and run setup again.
   pause
   exit /b 1
 )
@@ -39,49 +38,43 @@ if errorlevel 1 goto fail
 
 if not exist models mkdir models
 if not exist models\vosk-model-small-ru-0.22 (
-  echo Загружаю русскую модель распознавания речи...
+  echo Downloading Russian speech recognition model...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Invoke-WebRequest 'https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip' -OutFile 'vosk-model.zip'; Expand-Archive -Force 'vosk-model.zip' 'models'; Remove-Item 'vosk-model.zip'"
   if errorlevel 1 goto fail
 )
 
 where ollama >nul 2>nul
 if errorlevel 1 (
-  echo Устанавливаю Ollama...
+  echo Installing Ollama...
   where winget >nul 2>nul
   if errorlevel 1 (
-    echo Установи Ollama вручную: https://ollama.com/download/windows
+    echo Install Ollama manually from https://ollama.com/download/windows
     pause
     exit /b 1
   )
   winget install --id Ollama.Ollama -e --silent --accept-package-agreements --accept-source-agreements
   if errorlevel 1 goto fail
 )
+
 set "PATH=%LOCALAPPDATA%\Programs\Ollama;%PATH%"
 where ollama >nul 2>nul
 if errorlevel 1 (
-  echo Ollama установлена, но команда пока недоступна.
-  echo Перезапусти Windows и запусти setup.bat снова.
+  echo Ollama command not found. Restart Windows and run setup again.
   pause
   exit /b 1
 )
 
-echo Загружаю локальную модель Qwen 2.5 3B. Это может занять время...
+echo Downloading local Qwen model. This may take a while...
 ollama pull qwen2.5:3b
-if errorlevel 1 (
-  echo Не удалось загрузить ИИ-модель. Повтори позже команду: ollama pull qwen2.5:3b
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto fail
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$w=New-Object -ComObject WScript.Shell; $desktop=[Environment]::GetFolderPath('Desktop'); $s=$w.CreateShortcut((Join-Path $desktop 'Димасик.lnk')); $s.TargetPath='%CD%\.venv\Scripts\python.exe'; $s.Arguments='""%CD%\assistant\main.py""'; $s.WorkingDirectory='%CD%'; $s.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$w=New-Object -ComObject WScript.Shell; $desktop=[Environment]::GetFolderPath('Desktop'); $s=$w.CreateShortcut((Join-Path $desktop 'Dimasik.lnk')); $s.TargetPath='%CD%\.venv\Scripts\pythonw.exe'; $s.Arguments='""%CD%\assistant\main.py""'; $s.WorkingDirectory='%CD%'; $s.Save()"
 
-echo.
-echo Установка завершена! Запусти ярлык Димасик на рабочем столе.
+echo Setup completed. Launch Dimasik from the desktop shortcut.
 pause
 exit /b 0
 
 :fail
-echo.
-echo ОШИБКА УСТАНОВКИ. Проверь интернет и попробуй запустить setup.bat снова.
+echo SETUP FAILED. Check the error above, then run setup again.
 pause
 exit /b 1
