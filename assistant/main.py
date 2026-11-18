@@ -171,8 +171,12 @@ def listen(model, prompt):
 
 def ollama_ready():
     try:
-        return requests.get(OLLAMA_URL + "/api/tags", timeout=3).ok
-    except requests.RequestException:
+        response = requests.get(OLLAMA_URL + "/api/tags", timeout=3)
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        installed = {str(item.get("name", "")) for item in models}
+        return OLLAMA_MODEL in installed
+    except (requests.RequestException, ValueError, TypeError):
         return False
 
 
@@ -510,8 +514,8 @@ class DimasikApp:
             self.set_status("Готов к работе", self.GREEN)
             self._append("СИСТЕМА", "Готов к работе. Нажми «Включить микрофон» или напиши сообщение.", "system")
         else:
-            self.set_status("Голос готов • Ollama не найдена", "#f4c76b")
-            self._append("СИСТЕМА", "Распознавание речи готово, но Ollama пока недоступна. Установи Ollama и модель qwen2.5:3b, чтобы получать ответы ИИ.", "system")
+            self.set_status("Нужна установка Ollama / Qwen", "#f4c76b")
+            self._append("СИСТЕМА", "Распознавание речи готово, но локальная модель Qwen не найдена или Ollama не запущена. Закрой Димасика и запусти Install-Dimasik.bat из папки с установщиком.", "system")
 
     def send_text(self):
         text = self.entry.get().strip()
