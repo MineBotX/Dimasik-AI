@@ -1,0 +1,47 @@
+{
+  "assistant_name": "Димасик",
+  "wake_words": [
+    "димасик",
+    "димас",
+    "димон"
+  ],
+  "ollama_model": "qwen2.5:3b",
+  "voice_rate": 172,
+  "voice_volume": 1,
+  "personality": "Дружелюбный, умный, с лёгким чувством юмора. Отвечай по-русски и обычно кратко.",
+  "search_url": "https://www.google.com/search?q={query}",
+  "websites": {
+    "youtube": "https://www.youtube.com",
+    "ютуб": "https://www.youtube.com",
+    "гугл": "https://www.google.com",
+    "почта": "https://mail.google.com",
+    "диск": "https://drive.google.com",
+    "github": "https://github.com"
+  },
+  "apps": {
+    "блокнот": [
+      "notepad.exe"
+    ],
+    "калькулятор": [
+      "calc.exe"
+    ],
+    "проводник": [
+      "explorer.exe"
+    ],
+    "paint": [
+      "mspaint.exe"
+    ],
+    "паинт": [
+      "mspaint.exe"
+    ],
+    "диспетчер задач": [
+      "taskmgr.exe"
+    ],
+    "панель управления": [
+      "control.exe"
+    ],
+    "wordpad": [
+      "write.exe"
+    ]
+  }
+}
