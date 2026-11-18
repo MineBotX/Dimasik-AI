@@ -2,6 +2,7 @@ import ctypes
 import json
 import queue
 import subprocess
+import sys
 import time
 import webbrowser
 from collections import deque
@@ -14,7 +15,7 @@ import requests
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
 VOSK_MODEL = ROOT / "models" / "vosk-model-small-ru-0.22"
 OLLAMA_URL = "http://127.0.0.1:11434"
