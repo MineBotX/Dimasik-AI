@@ -8,10 +8,11 @@ on:
       - "assistant/**"
       - "requirements.txt"
       - "requirements-build.txt"
+      - "update.ps1"
       - ".github/workflows/build-windows.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -19,18 +20,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-build.txt
-
       - name: Download Vosk Russian model
         shell: pwsh
         run: |
@@ -39,30 +37,31 @@ jobs:
           New-Item -ItemType Directory -Force models | Out-Null
           Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile "$env:TEMP\vosk-model.zip"
           Expand-Archive -LiteralPath "$env:TEMP\vosk-model.zip" -DestinationPath models -Force
-          if (!(Test-Path "models/vosk-model-small-ru-0.22/conf/model.conf")) {
-            throw "Vosk model download or extraction failed"
-          }
-
+          if (!(Test-Path "models/vosk-model-small-ru-0.22/conf/model.conf")) { throw "Vosk model download failed" }
       - name: Build GUI executable
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all comtypes --collect-all win32com assistant/main.py
-
-      - name: Prepare portable folder
+      - name: Prepare package
         shell: pwsh
         run: |
-          Copy-Item config.json dist/Dimasik/config.json -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force dist/Dimasik/models | Out-Null
+          $version = $env:GITHUB_SHA.Substring(0,7)
+          Set-Content dist/Dimasik/VERSION $version -Encoding ascii
+          Copy-Item update.ps1 dist/Dimasik/update.ps1
           Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
-          @"
-          Dimasik GUI build.
-          Russian Vosk speech model is included.
-          Install Ollama and pull qwen2.5:3b for local AI responses.
-          "@ | Set-Content dist/Dimasik/README-FIRST.txt -Encoding utf8
-
-      - name: Upload GUI package
+          Compress-Archive -Path dist/Dimasik -DestinationPath Dimasik-Windows-GUI-x64.zip -Force
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Dimasik-Windows-GUI-x64
-          path: dist/Dimasik/
+          path: Dimasik-Windows-GUI-x64.zip
           if-no-files-found: error
           retention-days: 14
+      - name: Publish rolling update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Dimasik latest
+          body: "Latest automatic update package for Dimasik on Windows x64."
+          files: Dimasik-Windows-GUI-x64.zip
+          overwrite_files: true
+          make_latest: true
