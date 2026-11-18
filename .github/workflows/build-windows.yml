@@ -60,7 +60,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Dimasik latest
+          name: Dimasik ${{ github.sha }}
           body: "Latest automatic update package for Dimasik on Windows x64."
           files: Dimasik-Windows-GUI-x64.zip
           overwrite_files: true
