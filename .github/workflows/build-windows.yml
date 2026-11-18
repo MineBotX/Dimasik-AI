@@ -44,7 +44,7 @@ jobs:
       - name: Prepare package
         shell: pwsh
         run: |
-          $version = $env:GITHUB_SHA.Substring(0,7)
+          $version = $env:GITHUB_SHA
           Set-Content dist/Dimasik/VERSION $version -Encoding ascii
           Copy-Item update.ps1 dist/Dimasik/update.ps1
           Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
