@@ -10,6 +10,7 @@ import requests
 
 
 class _DuckParser(HTMLParser):
+    """Parser for both DuckDuckGo HTML and Lite result pages."""
     def __init__(self):
         super().__init__()
         self.items = []
@@ -20,10 +21,10 @@ class _DuckParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         classes = attrs.get("class", "").split()
-        if tag == "a" and "result__a" in classes:
+        if tag == "a" and ({"result__a", "result-link"} & set(classes)):
             self.current = {"title": "", "url": attrs.get("href", ""), "snippet": ""}
             self.capture = "title"
-        elif "result__snippet" in classes:
+        elif {"result__snippet", "result-snippet"} & set(classes):
             self.snippet = ""
             self.capture = "snippet"
 
@@ -106,34 +107,51 @@ class LocalKnowledge:
         return ranked[:limit]
 
     def search_web(self, query, limit=5):
-        try:
-            response = requests.get(
-                "https://html.duckduckgo.com/html/",
-                params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"},
-                timeout=12
-            )
-            response.raise_for_status()
-            parser = _DuckParser()
-            parser.feed(response.text)
-            results = []
-            for item in parser.items:
-                url = html.unescape(item.get("url", ""))
-                if url.startswith("//"):
-                    url = "https:" + url
-                if "duckduckgo.com/l/?" in url:
-                    target = parse_qs(urlparse(url).query).get("uddg", [])
-                    if target:
-                        url = target[0]
-                title = html.unescape(item.get("title", "")).strip()
-                snippet = html.unescape(item.get("snippet", "")).strip()
-                if title and url.startswith(("http://", "https://")):
-                    results.append({"title": title, "url": url, "snippet": snippet})
-                if len(results) >= limit:
-                    break
-            return {"online": bool(results), "results": results}
-        except (requests.RequestException, ValueError):
-            return {"online": False, "results": []}
+        """Try multiple public DuckDuckGo endpoints before reporting search failure."""
+        query = str(query).strip()
+        if not query:
+            return {"online": False, "results": [], "error": "Пустой поисковый запрос."}
+
+        endpoints = (
+            "https://html.duckduckgo.com/html/",
+            "https://lite.duckduckgo.com/lite/",
+        )
+        errors = []
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        }
+        for endpoint in endpoints:
+            try:
+                response = requests.get(endpoint, params={"q": query}, headers=headers, timeout=15)
+                response.raise_for_status()
+                parser = _DuckParser()
+                parser.feed(response.text)
+                results = []
+                for item in parser.items:
+                    url = html.unescape(item.get("url", "")).strip()
+                    if url.startswith("//"):
+                        url = "https:" + url
+                    if "duckduckgo.com/l/?" in url:
+                        target = parse_qs(urlparse(url).query).get("uddg", [])
+                        if target:
+                            url = target[0]
+                    title = html.unescape(item.get("title", "")).strip()
+                    snippet = html.unescape(item.get("snippet", "")).strip()
+                    if title and url.startswith(("http://", "https://")):
+                        results.append({"title": title, "url": url, "snippet": snippet})
+                    if len(results) >= limit:
+                        break
+                if results:
+                    return {"online": True, "results": results}
+                errors.append(f"{urlparse(endpoint).netloc}: страница открылась, но результаты не распознаны")
+            except requests.RequestException as exc:
+                errors.append(f"{urlparse(endpoint).netloc}: {exc.__class__.__name__}")
+            except (ValueError, TypeError) as exc:
+                errors.append(f"{urlparse(endpoint).netloc}: {exc.__class__.__name__}")
+
+        return {"online": False, "results": [], "error": "; ".join(errors) or "Поиск не вернул результатов."}
 
     @staticmethod
     def format_web_answer(query, results):
