@@ -466,7 +466,8 @@ def execute_command(command):
     if command.startswith(("найди в интернете ", "поищи в интернете ", "найди ", "поиск ", "загугли ")):
         query = command.split(" ", 1)[1].strip()
         if query:
-            speak(search_web(query))
+            # Голосовой поиск использует тот же механизм, что и текстовый чат.
+            speak(ask_local_ai("найди в интернете " + query))
         else:
             speak("Что именно найти?")
         return True
