@@ -21,6 +21,7 @@ from vosk import KaldiRecognizer, Model
 from brain import DimasikBrain
 from github_manager import GitHubManager
 from email_manager import EmailManager
+from knowledge import LocalKnowledge
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -81,6 +82,7 @@ def load_config():
 CONFIG = load_config()
 ASSISTANT_NAME = str(CONFIG.get("assistant_name", "Димасик"))
 BRAIN = DimasikBrain()
+KNOWLEDGE = LocalKnowledge(ROOT / "brain" / "knowledge.sqlite3")
 WAKE_WORDS = tuple(CONFIG["wake_words"])
 tts = pyttsx3.init()
 tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
@@ -291,16 +293,42 @@ def search_web(query, limit=5):
         return "Сейчас не удалось подключиться к поиску. Проверь интернет-соединение и попробуй ещё раз."
 
 
+def _looks_like_question(prompt):
+    value = str(prompt).strip().lower()
+    if "?" in value:
+        return True
+    return value.startswith((
+        "что ", "кто ", "где ", "когда ", "почему ", "зачем ", "как ",
+        "сколько ", "какой ", "какая ", "какие ", "расскажи о ", "объясни ",
+        "чем отличается ", "правда ли "
+    ))
+
+
 def ask_local_ai(prompt):
     history.append({"role": "user", "content": prompt})
     normalized = str(prompt).strip()
-    search_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
     lowered = normalized.lower()
-    search_prefix = next((prefix for prefix in search_prefixes if lowered.startswith(prefix)), None)
-    if search_prefix:
-        answer = search_web(normalized[len(search_prefix):])
+    explicit_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
+    explicit = next((prefix for prefix in explicit_prefixes if lowered.startswith(prefix)), None)
+    query = normalized[len(explicit):].strip() if explicit else normalized
+
+    # Для вопросов сначала пытаемся получить свежие источники из интернета.
+    if explicit or _looks_like_question(query):
+        result = KNOWLEDGE.search_web(query, limit=5)
+        if result.get("online"):
+            answer = KNOWLEDGE.format_web_answer(query, result["results"])
+            KNOWLEDGE.remember(prompt, answer, source="web")
+        else:
+            memories = KNOWLEDGE.find_similar(query, limit=3)
+            if memories:
+                answer = KNOWLEDGE.format_memory_answer(memories)
+            else:
+                answer = ("Сейчас интернет недоступен, а в моей локальной памяти "
+                          "не нашлось достаточно похожей информации. Не хочу выдумывать ответ.")
         history.append({"role": "assistant", "content": answer})
+        KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
+
     answer = conversational_reply(prompt)
     if answer is None:
         context = " ".join(item["content"] for item in list(history)[-4:])
@@ -308,8 +336,8 @@ def ask_local_ai(prompt):
         if not BRAIN.ready:
             answer = "Я пока учусь поддерживать свободный разговор. " + answer
     history.append({"role": "assistant", "content": answer})
+    KNOWLEDGE.remember(prompt, answer, source="conversation")
     return answer
-
 
 def launch_app(alias):
     command = CONFIG["apps"].get(alias)
