@@ -58,35 +58,9 @@ if (-not (Test-Path $ModelDir)) {
 }
 if (-not (Test-Path (Join-Path $ModelDir "conf\model.conf"))) { Fail "Vosk model folder is incomplete. Delete the model folder and rerun setup." }
 
-Write-Host "== Checking Ollama ==" -ForegroundColor Cyan
-$OllamaCmd = Get-Command ollama.exe -ErrorAction SilentlyContinue
-$OllamaExe = if ($OllamaCmd) { $OllamaCmd.Source } else { $null }
-if (-not $OllamaExe) {
-    $Candidates = @((Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"), (Join-Path $env:ProgramFiles "Ollama\ollama.exe"))
-    $OllamaExe = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-}
-if (-not $OllamaExe) {
-    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { Fail "Ollama is missing and winget is unavailable. Install it from ollama.com." }
-    & winget install --id Ollama.Ollama -e --silent --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) { Fail "Ollama installation failed. Install it manually and rerun setup." }
-    $Candidates = @((Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"), (Join-Path $env:ProgramFiles "Ollama\ollama.exe"))
-    $OllamaExe = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-}
-if (-not $OllamaExe) { Fail "Ollama was installed but could not be located. Restart Windows and rerun setup." }
-
-Write-Host "== Starting Ollama and downloading Qwen ==" -ForegroundColor Cyan
-try { Invoke-RestMethod "http://127.0.0.1:11434/api/tags" -TimeoutSec 2 | Out-Null }
-catch {
-    Start-Process -FilePath $OllamaExe -ArgumentList "serve" -WindowStyle Hidden
-    $Ready = $false
-    for ($i = 0; $i -lt 45; $i++) {
-        Start-Sleep -Seconds 2
-        try { Invoke-RestMethod "http://127.0.0.1:11434/api/tags" -TimeoutSec 2 | Out-Null; $Ready = $true; break } catch {}
-    }
-    if (-not $Ready) { Fail "Ollama server did not start. Open Ollama from Start menu and rerun setup." }
-}
-& $OllamaExe pull qwen2.5:3b
-if ($LASTEXITCODE -ne 0) { Fail "Could not download Qwen 2.5 3B. Check internet and disk space, then rerun setup." }
+Write-Host "== Обучение собственного ядра Димасика ==" -ForegroundColor Cyan
+& $VenvPython (Join-Path $Root "train_brain.py")
+if ($LASTEXITCODE -ne 0) { Fail "Не удалось обучить собственное ядро." }
 
 Write-Host "== Creating desktop shortcut ==" -ForegroundColor Cyan
 $Shell = New-Object -ComObject WScript.Shell
@@ -96,8 +70,6 @@ $Shortcut.TargetPath = $VenvPython
 $Shortcut.Arguments = '"' + (Join-Path $Root "assistant\main.py") + '"'
 $Shortcut.WorkingDirectory = $Root
 $Shortcut.Save()
-
-Write-Host ""
-Write-Host "Installation completed. Start Димасик from the desktop shortcut." -ForegroundColor Green
-Read-Host "Press Enter to close"
+Write-Host "Установка завершена. Запусти Димасика с рабочего стола." -ForegroundColor Green
+Read-Host "Нажми Enter для закрытия"
 exit 0
