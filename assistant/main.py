@@ -498,10 +498,20 @@ class DimasikApp:
                 asset = next((a for a in release.get("assets", []) if a.get("name") == "Dimasik-Windows-GUI-x64.zip"), None)
                 if not asset:
                     result = ("none", "Архив обновления пока не найден.")
-                elif str(release.get("tag_name")) == read_app_version():
-                    result = ("current", "Установлена последняя версия.")
                 else:
-                    result = ("available", asset.get("browser_download_url", ""))
+                    local_version = read_app_version()
+                    release_body = str(release.get("body") or "")
+                    release_version = ""
+                    for line in release_body.splitlines():
+                        if line.strip().lower().startswith("build:"):
+                            release_version = line.split(":", 1)[1].strip()
+                            break
+                    if release_version and release_version == local_version:
+                        result = ("current", "Установлена последняя версия.")
+                    elif not release_version:
+                        result = ("unknown", "У релиза нет номера сборки. Проверка станет доступна после следующей публикации.")
+                    else:
+                        result = ("available", asset.get("browser_download_url", ""))
         except Exception as exc:
             result = ("error", str(exc))
         def finish():
