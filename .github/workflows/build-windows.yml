@@ -40,6 +40,8 @@ jobs:
           Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile "$env:TEMP\vosk-model.zip"
           Expand-Archive -LiteralPath "$env:TEMP\vosk-model.zip" -DestinationPath models -Force
           if (!(Test-Path "models/vosk-model-small-ru-0.22/conf/model.conf")) { throw "Vosk model download failed" }
+      - name: Train Dimasik neural core
+        run: python train_brain.py
       - name: Build GUI executable
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all comtypes --collect-all win32com assistant/main.py
@@ -52,6 +54,7 @@ jobs:
           Set-Content dist/Dimasik/VERSION $env:GITHUB_SHA -Encoding ascii
           Copy-Item update.ps1 dist/Dimasik/update.ps1
           Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
+          Copy-Item brain dist/Dimasik/brain -Recurse -Force
           Copy-Item dist/Dimasik (Join-Path $package "Dimasik") -Recurse -Force
           Copy-Item install-runtime.ps1 $package
           Copy-Item Install-Dimasik.bat $package
@@ -68,7 +71,7 @@ jobs:
         with:
           tag_name: latest
           name: Dimasik ${{ github.sha }}
-          body: "Run Install-Dimasik.bat to install Ollama and Qwen automatically."
+          body: "Run Install-Dimasik.bat to install the locally trained Dimasik neural assistant. No Ollama or Qwen required."
           files: Dimasik-Windows-GUI-x64.zip
           overwrite_files: true
           make_latest: true
