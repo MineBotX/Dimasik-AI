@@ -218,8 +218,89 @@ def conversational_reply(prompt):
     return None
 
 
+class _SearchParser(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParser):
+    """Extracts titles and snippets from DuckDuckGo HTML results."""
+    def __init__(self):
+        super().__init__()
+        self.results = []
+        self._title = None
+        self._snippet = None
+        self._capture = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = attrs.get("class", "").split()
+        if tag == "a" and "result__a" in classes:
+            self._title = {"title": "", "url": attrs.get("href", "")}
+            self._capture = "title"
+        elif "result__snippet" in classes:
+            self._snippet = ""
+            self._capture = "snippet"
+
+    def handle_data(self, data):
+        if self._capture == "title" and self._title is not None:
+            self._title["title"] += data
+        elif self._capture == "snippet" and self._snippet is not None:
+            self._snippet += data
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._capture == "title" and self._title is not None:
+            self.results.append({**self._title, "snippet": ""})
+            self._title = None
+            self._capture = None
+        elif self._capture == "snippet" and self._snippet is not None:
+            if self.results:
+                self.results[-1]["snippet"] = self._snippet.strip()
+            self._snippet = None
+            self._capture = None
+
+
+def search_web(query, limit=5):
+    """Search the public web and return a short answer with source links."""
+    query = str(query).strip()
+    if not query:
+        return "Уточни, что именно нужно найти."
+    try:
+        response = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        parser = _SearchParser()
+        parser.feed(response.text)
+        results = [item for item in parser.results if item.get("title") and item.get("url")][:limit]
+        if not results:
+            return "Не удалось получить результаты поиска. Попробуй открыть поиск в браузере."
+        lines = ["Вот что удалось найти по запросу «" + query + "»:"]
+        for index, item in enumerate(results, 1):
+            url = item["url"]
+            if url.startswith("//"):
+                url = "https:" + url
+            if "duckduckgo.com/l/?" in url:
+                from urllib.parse import parse_qs, urlparse
+                target = parse_qs(urlparse(url).query).get("uddg", [])
+                if target:
+                    url = target[0]
+            snippet = " ".join(item.get("snippet", "").split())
+            lines.append(f"{index}. {item['title'].strip()}\n{snippet}\nИсточник: {url}")
+        lines.append("Это краткие выдержки из поисковой выдачи; важные сведения проверь по источникам.")
+        return "\n\n".join(lines)
+    except requests.RequestException:
+        return "Сейчас не удалось подключиться к поиску. Проверь интернет-соединение и попробуй ещё раз."
+
+
 def ask_local_ai(prompt):
     history.append({"role": "user", "content": prompt})
+    normalized = str(prompt).strip()
+    search_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
+    lowered = normalized.lower()
+    search_prefix = next((prefix for prefix in search_prefixes if lowered.startswith(prefix)), None)
+    if search_prefix:
+        answer = search_web(normalized[len(search_prefix):])
+        history.append({"role": "assistant", "content": answer})
+        return answer
     answer = conversational_reply(prompt)
     if answer is None:
         context = " ".join(item["content"] for item in list(history)[-4:])
@@ -354,12 +435,10 @@ def execute_command(command):
         ctypes.windll.user32.LockWorkStation()
         return True
 
-    if command.startswith(("найди ", "поиск ", "загугли ")):
+    if command.startswith(("найди в интернете ", "поищи в интернете ", "найди ", "поиск ", "загугли ")):
         query = command.split(" ", 1)[1].strip()
         if query:
-            template = str(CONFIG.get("search_url", DEFAULTS["search_url"]))
-            webbrowser.open(template.replace("{query}", quote_plus(query)))
-            speak("Ищу в интернете: " + query)
+            speak(search_web(query))
         else:
             speak("Что именно найти?")
         return True
