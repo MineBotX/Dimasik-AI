@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, filedialog
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -28,6 +28,7 @@ from local_coder import LocalCoder
 from dialogue import conversational_reply
 from modern_widgets import RoundedButton, RoundedPanel
 from image_generator import LocalImageGenerator, is_image_request
+from productivity import ProductivityStore
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -91,6 +92,7 @@ BRAIN = DimasikBrain()
 KNOWLEDGE = LocalKnowledge(ROOT / "brain" / "knowledge.sqlite3")
 CODE_WRITER = LocalCoder(ROOT)
 IMAGE_GENERATOR = LocalImageGenerator(ROOT)
+PRODUCTIVITY = ProductivityStore(ROOT / "brain" / "productivity.sqlite3")
 WAKE_WORDS = tuple(CONFIG["wake_words"])
 tts = pyttsx3.init()
 tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
@@ -220,6 +222,16 @@ def ask_local_ai(prompt):
     normalized = str(prompt).strip()
     lowered = normalized.lower()
 
+    # Local notes, tasks, reminders and calculator are real tools, not model guesses.
+    try:
+        productivity_answer = PRODUCTIVITY.handle_command(normalized)
+    except (ValueError, OverflowError) as exc:
+        productivity_answer = "Не получилось выполнить команду: " + str(exc)
+    if productivity_answer is not None:
+        history.append({"role": "assistant", "content": productivity_answer})
+        KNOWLEDGE.remember(prompt, productivity_answer, source="local-tool")
+        return productivity_answer
+
     # Generate original code with the local Granite model, not templates.
     if is_code_request(normalized):
         try:
@@ -269,13 +281,39 @@ def ask_local_ai(prompt):
     if explicit or _looks_like_question(query):
         result = KNOWLEDGE.search_web(query, limit=5)
         if result.get("online"):
-            answer = KNOWLEDGE.format_web_answer(query, result["results"])
+            source_text = KNOWLEDGE.format_web_answer(query, result["results"])
+            if CODE_WRITER.model_installed:
+                try:
+                    answer = CODE_WRITER.generate_chat(
+                        "Ответь на вопрос пользователя по найденным материалам. "
+                        "Отделяй подтверждённые сведения от предположений. Не добавляй факты, "
+                        "которых нет в выдержках. Сохрани прямые ссылки из материалов в конце. "
+                        "Если источники противоречат друг другу или данных недостаточно, скажи об этом.\n\n"
+                        + source_text,
+                        conversation=list(history)[:-1],
+                        max_tokens=1800,
+                    )
+                except Exception as exc:
+                    answer = source_text + "\n\nНе удалось запустить локальное обобщение Granite: " + str(exc)
+            else:
+                answer = source_text
             KNOWLEDGE.remember(prompt, answer, source="web")
         else:
-            memories = KNOWLEDGE.find_similar(query, limit=3)
-            if memories:
-                answer = KNOWLEDGE.format_memory_answer(memories)
+            if CODE_WRITER.model_installed:
+                try:
+                    answer = CODE_WRITER.generate_chat(
+                        "Поиск в интернете сейчас не сработал. Ответь из общих знаний и обязательно "
+                        "предупреди, что сведения не были проверены в интернете. Вопрос: " + query,
+                        conversation=list(history)[:-1],
+                        max_tokens=1600,
+                    )
+                except Exception as exc:
+                    answer = "Не удалось получить результаты поиска или запустить локальную модель: " + str(exc)
             else:
+                memories = KNOWLEDGE.find_similar(query, limit=3)
+                if memories:
+                    answer = KNOWLEDGE.format_memory_answer(memories)
+                else:
                 detail = str(result.get("error") or "").strip()
                 fallback = str(CONFIG.get("search_url", "https://www.google.com/search?q={query}"))
                 try:
@@ -292,10 +330,16 @@ def ask_local_ai(prompt):
         history.append({"role": "assistant", "content": answer})
         return answer
 
-    context = " ".join(item["content"] for item in list(history)[-4:])
-    answer = BRAIN.answer(context)
-    if not BRAIN.ready:
-        answer = "Я пока учусь поддерживать свободный разговор. " + answer
+    if CODE_WRITER.model_installed:
+        try:
+            answer = CODE_WRITER.generate_chat(normalized, conversation=list(history)[:-1])
+        except Exception as exc:
+            answer = "Не удалось запустить локальную модель Granite: " + str(exc)
+    else:
+        context = " ".join(item["content"] for item in list(history)[-4:])
+        answer = BRAIN.answer(context)
+        if not BRAIN.ready:
+            answer = "Для полноценного диалога скачай локальную модель ИИ кнопкой внизу окна. Пока доступно экспериментальное ядро DimaCore. " + answer
     history.append({"role": "assistant", "content": answer})
     KNOWLEDGE.remember(prompt, answer, source="conversation")
     return answer
