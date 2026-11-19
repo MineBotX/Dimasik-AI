@@ -1,49 +1,10 @@
 """Private local memory and cautious online retrieval for Dimasik."""
-import html
 import re
 import sqlite3
 import time
-from html.parser import HTMLParser
-from urllib.parse import parse_qs, urlparse
 
 import requests
 from search_backend import parse_search_results
-
-
-class _DuckParser(HTMLParser):
-    """Parser for both DuckDuckGo HTML and Lite result pages."""
-    def __init__(self):
-        super().__init__()
-        self.items = []
-        self.current = None
-        self.capture = None
-        self.snippet = ""
-
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        classes = attrs.get("class", "").split()
-        if tag == "a" and ({"result__a", "result-link"} & set(classes)):
-            self.current = {"title": "", "url": attrs.get("href", ""), "snippet": ""}
-            self.capture = "title"
-        elif {"result__snippet", "result-snippet"} & set(classes):
-            self.snippet = ""
-            self.capture = "snippet"
-
-    def handle_data(self, data):
-        if self.capture == "title" and self.current is not None:
-            self.current["title"] += data
-        elif self.capture == "snippet":
-            self.snippet += data
-
-    def handle_endtag(self, tag):
-        if tag == "a" and self.capture == "title" and self.current is not None:
-            self.items.append(self.current)
-            self.current = None
-            self.capture = None
-        elif self.capture == "snippet":
-            if self.items:
-                self.items[-1]["snippet"] = self.snippet.strip()
-            self.capture = None
 
 
 class LocalKnowledge:
