@@ -1,46 +1,43 @@
-import ast
 import unittest
 
-from assistant.code_writer import generate_code, is_code_request
+from assistant.code_writer import is_code_request
+from assistant.local_coder import LocalCoder, MODEL_SHA256, MODEL_URL
 
 
 class CodeWriterTests(unittest.TestCase):
     def test_detects_russian_code_requests(self):
-        self.assertTrue(is_code_request("Напиши код калькулятора на Python"))
-        self.assertTrue(is_code_request("Сделай игру угадай число на Python"))
-        self.assertTrue(is_code_request("Создай сайт на HTML"))
-        self.assertTrue(is_code_request("Создай список задач на Python"))
-        self.assertTrue(is_code_request("Напиши веб-страницу"))
-        self.assertFalse(is_code_request("Как дела?"))
-
-    def test_python_templates_are_valid_syntax(self):
         prompts = [
             "Напиши код калькулятора на Python",
-            "Напиши игру угадай число на Python",
-            "Создай список задач на Python",
-            "Сделай простой API сервер на Python",
+            "Создай программу для учёта расходов",
+            "Сделай игру с инвентарём на Python",
+            "Разработай веб-приложение для заметок",
+            "Исправь функцию авторизации",
+            "Добавь API для моего приложения",
+            "Напиши на C++ парсер JSON",
         ]
         for prompt in prompts:
             with self.subTest(prompt=prompt):
-                result = generate_code(prompt)
-                self.assertIn("```python", result)
-                code = result.split("```python", 1)[1].split("```", 1)[0]
-                ast.parse(code)
+                self.assertTrue(is_code_request(prompt))
 
-    def test_generates_html_website(self):
-        result = generate_code("Создай простой сайт на HTML")
-        self.assertIn("```html", result)
-        self.assertIn("<!doctype html>", result.lower())
-        self.assertIn("</html>", result.lower())
+    def test_ignores_normal_chat(self):
+        for prompt in ("Как дела?", "Расскажи о Python", "Что такое API?"):
+            with self.subTest(prompt=prompt):
+                self.assertFalse(is_code_request(prompt))
 
-    def test_generates_cpp_calculator(self):
-        result = generate_code("Напиши калькулятор на C++")
-        self.assertIn("```cpp", result)
-        self.assertIn("#include <iostream>", result)
+    def test_prompt_contains_programming_instructions(self):
+        messages = LocalCoder._messages("Создай REST API", conversation=[
+            {"role": "user", "content": "Нужно на Python"},
+            {"role": "assistant", "content": "Понял."},
+        ])
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertIn("самостоятельно создавать новый программный код", messages[0]["content"])
+        self.assertEqual(messages[-1], {"role": "user", "content": "Создай REST API"})
+        self.assertTrue(any(item["role"] == "assistant" for item in messages[1:-1]))
 
-    def test_unknown_task_does_not_invent_code(self):
-        result = generate_code("Напиши сложную систему управления космическим кораблём")
-        self.assertIn("опиши подробнее", result.lower())
+    def test_model_download_is_pinned_and_hash_checked(self):
+        self.assertIn("huggingface.co/ibm-granite/", MODEL_URL)
+        self.assertEqual(len(MODEL_SHA256), 64)
+        self.assertTrue(all(char in "0123456789abcdef" for char in MODEL_SHA256))
 
 
 if __name__ == "__main__":
