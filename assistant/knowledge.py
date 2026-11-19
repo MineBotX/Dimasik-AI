@@ -1,6 +1,7 @@
 """Private local memory and cautious online retrieval for Dimasik."""
 import re
 import sqlite3
+from contextlib import closing
 import time
 
 import requests
@@ -23,7 +24,7 @@ class LocalKnowledge:
 
     def __init__(self, path):
         self.path = str(path)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +48,7 @@ class LocalKnowledge:
         answer = str(answer).strip()[:6000]
         if not question or not answer:
             return
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(
                 "INSERT INTO memories(question, answer, source, created) VALUES (?, ?, ?, ?)",
                 (question, answer, source, time.time())
@@ -57,7 +58,7 @@ class LocalKnowledge:
         query_tokens = self._tokens(query)
         if not query_tokens:
             return []
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             rows = db.execute(
                 "SELECT question, answer, source, created FROM memories ORDER BY created DESC LIMIT 1500"
             ).fetchall()
