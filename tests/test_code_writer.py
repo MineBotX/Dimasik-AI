@@ -9,6 +9,8 @@ class CodeWriterTests(unittest.TestCase):
         self.assertTrue(is_code_request("Напиши код калькулятора на Python"))
         self.assertTrue(is_code_request("Сделай игру угадай число на Python"))
         self.assertTrue(is_code_request("Создай сайт на HTML"))
+        self.assertTrue(is_code_request("Создай список задач на Python"))
+        self.assertTrue(is_code_request("Напиши веб-страницу"))
         self.assertFalse(is_code_request("Как дела?"))
 
     def test_python_templates_are_valid_syntax(self):
