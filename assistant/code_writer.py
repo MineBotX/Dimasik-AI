@@ -23,7 +23,7 @@ def _language(text):
         return "html"
     if re.search(r"\b(язык\s*)?(javascript|js)\b", text):
         return "javascript"
-    if re.search(r"\b(c\+\+|cpp)\b", text):
+    if "c++" in text or re.search(r"\bcpp\b", text):
         return "cpp"
     if re.search(r"\b(java)\b", text):
         return "java"
@@ -374,7 +374,7 @@ def generate_code(prompt):
         options = (
             "Пока у меня есть проверенные заготовки для калькулятора, игры «Угадай число», "
             "списка задач, простого локального API и HTML-страницы. "
-            "Для другой программы напиши, что она должна делать, на каком языке и какие данные "
+            "Для другой программы опиши подробнее, что она должна делать, на каком языке и какие данные "
             "получает/возвращает. Я не стану выдавать случайный текст за рабочий код."
         )
         return options
