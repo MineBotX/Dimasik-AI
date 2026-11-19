@@ -336,8 +336,8 @@ class DimasikApp:
     def __init__(self, root):
         self.root = root
         self.root.title(ASSISTANT_NAME + " — локальный ИИ")
-        self.root.geometry("1080x760")
-        self.root.minsize(820, 620)
+        self.root.geometry("1000x700")
+        self.root.minsize(720, 540)
         self.root.configure(bg=self.BG)
         self.running = threading.Event()
         self.github = GitHubManager()
@@ -351,66 +351,81 @@ class DimasikApp:
         self.root.after(1800, lambda: self.check_updates(silent=True))
 
     def _build(self):
-        header = tk.Frame(self.root, bg=self.PANEL, padx=22, pady=18)
+        header = tk.Frame(self.root, bg=self.PANEL, padx=16, pady=10)
         header.pack(fill="x")
         left = tk.Frame(header, bg=self.PANEL)
         left.pack(side="left", fill="x", expand=True)
         tk.Label(left, text="◈  " + ASSISTANT_NAME, bg=self.PANEL, fg=self.TEXT,
-                 font=("Segoe UI", 22, "bold")).pack(anchor="w")
+                 font=("Segoe UI", 20, "bold")).pack(anchor="w")
         tk.Label(left, text="ЛОКАЛЬНЫЙ ГОЛОСОВОЙ ПОМОЩНИК", bg=self.PANEL,
-                 fg=self.MUTED, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(3, 0))
-        self.status = tk.Label(header, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
-                               font=("Segoe UI", 10, "bold"))
-        self.status.pack(side="right", padx=(8, 0))
-        self.mood_label = tk.Label(header, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT, font=("Segoe UI", 11, "bold"))
-        self.mood_label.pack(side="right", padx=18)
-        body = tk.Frame(self.root, bg=self.BG, padx=20, pady=16)
+                 fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(2, 0))
+        right = tk.Frame(header, bg=self.PANEL)
+        right.pack(side="right")
+        self.mic_btn = tk.Button(right, text="▶  ВКЛЮЧИТЬ МИКРОФОН", command=self.toggle_listening,
+                                 bg=self.GREEN, fg="#06111e", activebackground="#83efb9",
+                                 relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=10,
+                                 cursor="hand2")
+        self.mic_btn.pack(anchor="e", pady=(0, 5))
+        self.status = tk.Label(right, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
+                               font=("Segoe UI", 9, "bold"))
+        self.status.pack(anchor="e")
+        self.mood_label = tk.Label(right, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT,
+                                   font=("Segoe UI", 9, "bold"))
+        self.mood_label.pack(anchor="e", pady=(3, 0))
+
+        body = tk.Frame(self.root, bg=self.BG, padx=14, pady=10)
         body.pack(fill="both", expand=True)
-        self.chat = tk.Text(body, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
-                            relief="flat", wrap="word", padx=18, pady=16,
-                            font=("Segoe UI", 11), state="disabled", spacing1=5, spacing3=9)
-        self.chat.pack(fill="both", expand=True)
-        self.chat.tag_configure("system", foreground=self.MUTED, font=("Segoe UI", 9))
-        self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 10, "bold"))
-        self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 10, "bold"))
-        self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=8, lmargin2=8)
-        hero = tk.Frame(body, bg=self.PANEL, padx=16, pady=12)
-        hero.pack(fill="x", pady=(0, 12))
-        self.avatar = tk.Label(hero, text="🙂", bg=self.PANEL, fg=self.ACCENT, font=("Segoe UI Emoji", 34))
-        self.avatar.pack(side="left", padx=(0, 16))
-        tk.Label(hero, text="Твой помощник всегда рядом", bg=self.PANEL, fg=self.TEXT, font=("Segoe UI", 13, "bold")).pack(side="left")
+        hero = tk.Frame(body, bg=self.PANEL, padx=12, pady=7)
+        hero.pack(fill="x", pady=(0, 8))
+        self.avatar = tk.Label(hero, text="🙂", bg=self.PANEL, fg=self.ACCENT,
+                               font=("Segoe UI Emoji", 25))
+        self.avatar.pack(side="left", padx=(0, 10))
+        tk.Label(hero, text="Твой помощник всегда рядом", bg=self.PANEL, fg=self.TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side="left")
         self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
-        controls = tk.Frame(body, bg=self.BG)
-        controls.pack(fill="x", pady=(12, 0))
+
+        bottom = tk.Frame(body, bg=self.BG)
+        bottom.pack(side="bottom", fill="x", pady=(8, 0))
+        controls = tk.Frame(bottom, bg=self.BG)
+        controls.pack(fill="x", pady=(0, 7))
         self.entry = tk.Entry(controls, bg=self.PANEL2, fg=self.TEXT, insertbackground=self.TEXT,
-                              relief="flat", font=("Segoe UI", 12), highlightthickness=1,
+                              relief="flat", font=("Segoe UI", 11), highlightthickness=1,
                               highlightbackground="#263653", highlightcolor=self.ACCENT)
-        self.entry.pack(side="left", fill="x", expand=True, ipady=12, padx=(0, 8))
+        self.entry.pack(side="left", fill="x", expand=True, ipady=10, padx=(0, 8))
         self.entry.bind("<Return>", lambda event: self.send_text())
         self.send_btn = tk.Button(controls, text="Отправить", command=self.send_text,
                                   bg=self.ACCENT, fg="#06111e", activebackground="#83d9ff",
-                                  relief="flat", font=("Segoe UI", 10, "bold"), padx=16, pady=10,
+                                  relief="flat", font=("Segoe UI", 9, "bold"), padx=14, pady=9,
                                   cursor="hand2")
         self.send_btn.pack(side="left")
-        bottom = tk.Frame(body, bg=self.BG)
-        bottom.pack(fill="x", pady=(12, 0))
-        self.mic_btn = tk.Button(bottom, text="▶  Включить микрофон", command=self.toggle_listening,
-                                 bg=self.PANEL2, fg=self.TEXT, activebackground="#263653",
-                                 relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=10,
-                                 cursor="hand2")
-        self.mic_btn.pack(side="left")
-        tk.Button(bottom, text="⚙  Настройки", command=self.open_settings,
+
+        actions = tk.Frame(bottom, bg=self.BG)
+        actions.pack(fill="x")
+        tk.Button(actions, text="⚙ Настройки", command=self.open_settings,
                   bg=self.PANEL2, fg=self.TEXT, activebackground="#263653", relief="flat",
-                  font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="left", padx=8)
-        self.update_btn = tk.Button(bottom, text="↻  Проверить обновления", command=self.check_updates, bg=self.PANEL2, fg=self.ACCENT, relief="flat", padx=10, pady=10)
-        self.update_btn.pack(side="left", padx=8)
-        tk.Button(bottom, text="⌘  GitHub", command=self.open_github, bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=10, cursor="hand2").pack(side="left", padx=5)
-        tk.Button(bottom, text="✉  Почта", command=self.open_email, bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=10, cursor="hand2").pack(side="left", padx=5)
-        tk.Button(bottom, text="Очистить чат", command=self.clear_chat,
+                  font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2").pack(side="left", padx=(0, 5))
+        self.update_btn = tk.Button(actions, text="↻ Обновления", command=self.check_updates,
+                                    bg=self.PANEL2, fg=self.ACCENT, relief="flat",
+                                    font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2")
+        self.update_btn.pack(side="left", padx=5)
+        tk.Button(actions, text="⌘ GitHub", command=self.open_github, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
+        tk.Button(actions, text="✉ Почта", command=self.open_email, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
+        tk.Button(actions, text="Очистить чат", command=self.clear_chat,
                   bg=self.PANEL2, fg=self.MUTED, activebackground="#263653", relief="flat",
-                  font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="right")
-        tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции подключаются отдельно",
-                 bg=self.BG, fg="#667995", font=("Segoe UI", 8), pady=8).pack()
+                  font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2").pack(side="right")
+
+        self.chat = tk.Text(body, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
+                            relief="flat", wrap="word", padx=14, pady=12,
+                            font=("Segoe UI", 10), state="disabled", spacing1=4, spacing3=7)
+        self.chat.pack(fill="both", expand=True)
+        self.chat.tag_configure("system", foreground=self.MUTED, font=("Segoe UI", 8))
+        self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 9, "bold"))
+        self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 9, "bold"))
+        self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=7, lmargin2=7)
+        tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции отдельно",
+                 bg=self.BG, fg="#667995", font=("Segoe UI", 7), pady=4).pack()
 
     def set_mood(self, mood):
         emoji, label, color = mood
