@@ -29,6 +29,7 @@ from dialogue import conversational_reply
 from modern_widgets import RoundedButton, RoundedPanel
 from image_generator import LocalImageGenerator, is_image_request
 from productivity import ProductivityStore
+from file_reader import read_document, SUPPORTED_EXTENSIONS
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
