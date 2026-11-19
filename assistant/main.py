@@ -34,7 +34,8 @@ RELEASE_API = "https://api.github.com/repos/MineBotX/Dimasik-AI/releases/tags/la
 DEFAULTS = {
     "assistant_name": "Димасик",
     "wake_words": ["димасик", "димас", "димон"],
-    "voice_rate": 172,
+    "voice_rate": 165,
+    "voice_name": "",
     "voice_volume": 1.0,
     "personality": "Дружелюбный, умный, с лёгким чувством юмора. Отвечай по-русски и обычно кратко.",
     "search_url": "https://www.google.com/search?q={query}",
@@ -121,9 +122,10 @@ def configure_voice():
         russian = [v for v in voices if any(tag in (str(v.id) + " " + str(v.name)).lower()
                     for tag in ("ru", "russian", "рус"))]
         if russian:
-            preferred = ("dmitry", "pavel", "андрей", "александр", "дмитрий")
-            selected = next((v for v in russian if any(tag in (v.name or "").lower()
-                             for tag in preferred)), russian[0])
+            preferred = ("pavel", "андрей", "alexander", "александр", "иван", "dmitry", "дмитрий")
+            configured = str(CONFIG.get("voice_name", "")).strip().lower()
+            selected = next((v for v in russian if configured and configured in (str(v.id) + " " + str(v.name)).lower()), None)
+            selected = selected or next((v for tag in preferred for v in russian if tag in (v.name or "").lower()), russian[0])
             tts.setProperty("voice", selected.id)
             print("Голос:", selected.name)
         else:
@@ -142,8 +144,15 @@ def speak(message):
         UI_APP.post_message(ASSISTANT_NAME, message)
     flush_audio()
     try:
+        # Change speaking tempo with the detected emotion.
+        emotion, _label, _color = mood_for_text(message)
+        base_rate = max(100, min(250, int(CONFIG.get("voice_rate", 165))))
+        rate_shift = {"😄": 22, "😊": 14, "🤔": 8, "😟": -18, "😢": -24, "😮": 18}.get(emotion, 0)
+        tts.setProperty("rate", max(100, min(250, base_rate + rate_shift)))
+        tts.setProperty("volume", max(0.0, min(1.0, float(CONFIG.get("voice_volume", 1.0)))))
         tts.say(message)
         tts.runAndWait()
+        tts.setProperty("rate", base_rate)
     except Exception as exc:
         print("Ошибка озвучивания:", exc)
     flush_audio()
