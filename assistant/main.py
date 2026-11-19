@@ -279,8 +279,9 @@ def _looks_like_question(prompt):
         return True
     return value.startswith((
         "что ", "кто ", "где ", "когда ", "почему ", "зачем ", "как ",
-        "сколько ", "какой ", "какая ", "какие ", "расскажи о ", "объясни ",
-        "чем отличается ", "правда ли "
+        "сколько ", "какой ", "какая ", "какие ", "расскажи о ", "расскажи про ",
+        "объясни ", "чем отличается ", "правда ли ", "what ", "who ", "where ",
+        "when ", "why ", "how ", "which ", "tell me about "
     ))
 
 
@@ -307,7 +308,12 @@ def ask_local_ai(prompt):
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
 
-    explicit_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
+    explicit_prefixes = (
+        "найди информацию о ", "поищи информацию о ",
+        "найди в интернете ", "поищи в интернете ",
+        "найди ", "поищи ", "загугли ", "поиск ",
+        "search for ", "look up ",
+    )
     explicit = next((prefix for prefix in explicit_prefixes if lowered.startswith(prefix)), None)
     query = normalized[len(explicit):].strip() if explicit else normalized
 
@@ -322,8 +328,19 @@ def ask_local_ai(prompt):
             if memories:
                 answer = KNOWLEDGE.format_memory_answer(memories)
             else:
-                answer = ("Сейчас интернет недоступен, а в моей локальной памяти "
-                          "не нашлось достаточно похожей информации. Не хочу выдумывать ответ.")
+                detail = str(result.get("error") or "").strip()
+                fallback = str(CONFIG.get("search_url", "https://www.google.com/search?q={query}"))
+                try:
+                    browser_url = fallback.format(query=quote_plus(query))
+                except (KeyError, ValueError):
+                    browser_url = "https://www.google.com/search?q=" + quote_plus(query)
+                answer = (
+                    "Не удалось получить результаты из поисковых систем. "
+                    "Проверь интернет-соединение или открой поиск вручную:\\n"
+                    + browser_url
+                )
+                if detail:
+                    answer += "\\nПодробности: " + detail
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
