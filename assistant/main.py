@@ -23,6 +23,7 @@ from github_manager import GitHubManager
 from email_manager import EmailManager
 from knowledge import LocalKnowledge
 from crosshair_api import start_server as start_crosshair_api
+from code_writer import is_code_request, generate_code
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -151,6 +152,10 @@ def speak(message):
     if UI_APP is not None:
         UI_APP.set_mood(mood_for_text(message))
         UI_APP.post_message(ASSISTANT_NAME, message)
+    # Source code is shown in the chat but is not read aloud token by token.
+    if "\x60\x60\x60" in message:
+        flush_audio()
+        return
     flush_audio()
     try:
         # Change speaking tempo with the detected emotion.
@@ -309,6 +314,15 @@ def ask_local_ai(prompt):
     history.append({"role": "user", "content": prompt})
     normalized = str(prompt).strip()
     lowered = normalized.lower()
+
+    # Code requests use a reviewed offline template path, not free-form
+    # next-token prediction from the tiny experimental DimaCore model.
+    if is_code_request(normalized):
+        answer = generate_code(normalized)
+        history.append({"role": "assistant", "content": answer})
+        KNOWLEDGE.remember(prompt, answer, source="conversation")
+        return answer
+
     explicit_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
     explicit = next((prefix for prefix in explicit_prefixes if lowered.startswith(prefix)), None)
     query = normalized[len(explicit):].strip() if explicit else normalized
@@ -390,7 +404,9 @@ def show_help():
     speak(
         "Я умею сообщать время и дату, открывать программы и папки, "
         "управлять громкостью, открывать сайты и настройки Windows, "
-        "искать в интернете и отвечать на вопросы локальной моделью. "
+        "искать в интернете, писать типовой код на Python и создавать простые HTML-страницы. "
+        "Для программирования скажи: напиши код калькулятора на Python. "
+        "Сложные нестандартные проекты нужно описать подробнее. "
         "Список пользовательских программ и сайтов можно менять в config.json."
     )
 
