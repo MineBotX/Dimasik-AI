@@ -269,7 +269,6 @@ def ask_local_ai(prompt):
                 if detail:
                     answer += "\nПодробности: " + detail
         history.append({"role": "assistant", "content": answer})
-        KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
 
     context = " ".join(item["content"] for item in list(history)[-4:])
