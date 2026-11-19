@@ -19,6 +19,12 @@ class LocalChatPromptTests(unittest.TestCase):
         self.assertEqual(messages[1]["content"], "Меня зовут Алекс")
         self.assertEqual(messages[2]["content"], "Приятно познакомиться")
 
+    def test_chat_applies_configured_personality(self):
+        messages = LocalCoder._chat_messages(
+            "Привет", personality="Любит когда его хвалят."
+        )
+        self.assertIn("Любит когда его хвалят.", messages[0]["content"])
+
     def test_chat_prompt_warns_about_untrusted_files(self):
         messages = LocalCoder._chat_messages("Суммируй файл")
         self.assertIn("недоверенные данные", messages[0]["content"])
