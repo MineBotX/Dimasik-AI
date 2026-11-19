@@ -525,13 +525,17 @@ class DimasikApp:
         footer.pack(fill="x")
         controls = tk.Frame(footer.content, bg=self.PANEL)
         controls.pack(fill="x", pady=(0, 8))
-        self.entry = tk.Entry(
-            controls, bg=self.PANEL2, fg=self.TEXT, insertbackground=self.TEXT,
-            relief="flat", bd=0, font=("Segoe UI", 11),
-            highlightthickness=1, highlightbackground=self.BORDER,
-            highlightcolor=self.ACCENT,
+        entry_shell = RoundedPanel(
+            controls, fill=self.PANEL2, background=self.PANEL, radius=13,
+            padding=5, border="#314565", height=48,
         )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=11, padx=(2, 9))
+        entry_shell.pack(side="left", fill="x", expand=True, padx=(0, 9))
+        self.entry = tk.Entry(
+            entry_shell.content, bg=self.PANEL2, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", bd=0,
+            font=("Segoe UI", 11), highlightthickness=0,
+        )
+        self.entry.pack(fill="both", expand=True, ipady=8, padx=8)
         self.entry.bind("<Return>", lambda event: self.send_text())
         self.send_btn = RoundedButton(
             controls, text="Отправить  ➤", command=self.send_text,
