@@ -316,19 +316,19 @@ def ask_local_ai(prompt):
                 if memories:
                     answer = KNOWLEDGE.format_memory_answer(memories)
                 else:
-                detail = str(result.get("error") or "").strip()
-                fallback = str(CONFIG.get("search_url", "https://www.google.com/search?q={query}"))
-                try:
-                    browser_url = fallback.format(query=quote_plus(query))
-                except (KeyError, ValueError):
-                    browser_url = "https://www.google.com/search?q=" + quote_plus(query)
-                answer = (
-                    "Не удалось получить результаты из поисковых систем. "
-                    "Проверь интернет-соединение или открой поиск вручную:\n"
-                    + browser_url
-                )
-                if detail:
-                    answer += "\nПодробности: " + detail
+                    detail = str(result.get("error") or "").strip()
+                    fallback = str(CONFIG.get("search_url", "https://www.google.com/search?q={query}"))
+                    try:
+                        browser_url = fallback.format(query=quote_plus(query))
+                    except (KeyError, ValueError):
+                        browser_url = "https://www.google.com/search?q=" + quote_plus(query)
+                    answer = (
+                        "Не удалось получить результаты из поисковых систем. "
+                        "Проверь интернет-соединение или открой поиск вручную:\n"
+                        + browser_url
+                    )
+                    if detail:
+                        answer += "\nПодробности: " + detail
         history.append({"role": "assistant", "content": answer})
         return answer
 
