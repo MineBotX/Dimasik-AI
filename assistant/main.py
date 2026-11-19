@@ -597,6 +597,9 @@ class DimasikApp:
         self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=7, lmargin2=7)
+        self.chat.tag_configure("code", foreground="#a8f0ce", background="#080e1b",
+                                font=("Consolas", 9), lmargin1=16, lmargin2=16,
+                                spacing1=3, spacing3=3)
         self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
         tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции отдельно",
                  bg=self.BG, fg="#667995", font=("Segoe UI", 7), pady=4).pack()
@@ -660,7 +663,16 @@ class DimasikApp:
     def _append(self, who, message, tag):
         self.chat.configure(state="normal")
         self.chat.insert("end", who + "\n", tag)
-        self.chat.insert("end", message + "\n\n", "body")
+        parts = str(message).split("\x60\x60\x60")
+        for index, part in enumerate(parts):
+            if index % 2:
+                _language, separator, code = part.partition("\n")
+                if not separator:
+                    code = part
+                self.chat.insert("end", code.rstrip() + "\n", "code")
+            else:
+                self.chat.insert("end", part, "body")
+        self.chat.insert("end", "\n", "body")
         self.chat.configure(state="disabled")
         self.chat.see("end")
 
