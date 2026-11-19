@@ -221,6 +221,7 @@ def ask_local_ai(prompt):
     history.append({"role": "user", "content": prompt})
     normalized = str(prompt).strip()
     lowered = normalized.lower()
+    is_file_analysis = lowered.startswith("проанализируй выбранный файл")
 
     # Local notes, tasks, reminders and calculator are real tools, not model guesses.
     try:
@@ -341,7 +342,8 @@ def ask_local_ai(prompt):
         if not BRAIN.ready:
             answer = "Для полноценного диалога скачай локальную модель ИИ кнопкой внизу окна. Пока доступно экспериментальное ядро DimaCore. " + answer
     history.append({"role": "assistant", "content": answer})
-    KNOWLEDGE.remember(prompt, answer, source="conversation")
+    if not is_file_analysis:
+        KNOWLEDGE.remember(prompt, answer, source="conversation")
     return answer
 
 def launch_app(alias):
@@ -1229,8 +1231,72 @@ class DimasikApp:
                     listing.insert("end", "—" * 50)
             except Exception as exc:
                 messagebox.showerror("Почта", str(exc), parent=win)
-        tk.Button(win, text="Проверить входящие", command=load_mail, bg=self.PANEL2, fg=self.TEXT,
-                  relief="flat", padx=12, pady=8).pack(anchor="w", padx=20, pady=(0, 14))
+        mail_actions = tk.Frame(win, bg=self.BG)
+        mail_actions.pack(fill="x", padx=20, pady=(0, 14))
+        tk.Button(mail_actions, text="Проверить входящие", command=load_mail, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=12, pady=8).pack(side="left")
+        tk.Button(mail_actions, text="Написать письмо", command=self.compose_email, bg=self.ACCENT, fg="#06111e",
+                  relief="flat", padx=12, pady=8).pack(side="left", padx=8)
+
+    def compose_email(self):
+        if not self.email_account.get("address") or not self.email_account.get("smtp_host"):
+            messagebox.showwarning("Почта", "Сначала подключи почту и сохрани SMTP-настройки.")
+            return
+        win = tk.Toplevel(self.root)
+        win.title("Новое письмо")
+        win.geometry("620x520")
+        win.configure(bg=self.BG)
+        fields = {}
+        for title in ("Кому", "Тема"):
+            tk.Label(win, text=title, bg=self.BG, fg=self.MUTED).pack(anchor="w", padx=18, pady=(12, 3))
+            entry = tk.Entry(win, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
+                             relief="flat", font=("Segoe UI", 10))
+            entry.pack(fill="x", padx=18, ipady=7)
+            fields[title] = entry
+        tk.Label(win, text="Текст письма", bg=self.BG, fg=self.MUTED).pack(anchor="w", padx=18, pady=(12, 3))
+        body = tk.Text(win, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
+                       relief="flat", wrap="word", font=("Segoe UI", 10), height=12)
+        body.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+        send_button = tk.Button(win, text="Отправить письмо", bg=self.ACCENT, fg="#06111e",
+                                relief="flat", padx=14, pady=9)
+        send_button.pack(anchor="e", padx=18, pady=(0, 16))
+
+        def send():
+            recipient = fields["Кому"].get().strip()
+            subject = fields["Тема"].get().strip()
+            message = body.get("1.0", "end").strip()
+            if "@" not in recipient or not message:
+                messagebox.showwarning("Почта", "Укажи корректный адрес получателя и текст письма.", parent=win)
+                return
+            if not messagebox.askyesno(
+                "Подтвердить отправку",
+                f"Отправить письмо на {recipient}?\nТема: {subject or '(без темы)'}",
+                parent=win,
+            ):
+                return
+            send_button.configure(state="disabled", text="Отправляю…")
+
+            def worker():
+                error = None
+                try:
+                    self.email.send_message(self.email_account, recipient, subject, message)
+                except Exception as exc:
+                    error = str(exc)
+
+                def finish():
+                    if not win.winfo_exists():
+                        return
+                    send_button.configure(state="normal", text="Отправить письмо")
+                    if error:
+                        messagebox.showerror("Почта", "Не удалось отправить письмо: " + error, parent=win)
+                    else:
+                        messagebox.showinfo("Почта", "Письмо отправлено.", parent=win)
+                        win.destroy()
+                self.root.after(0, finish)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        send_button.configure(command=send)
 
     def open_settings(self):
         try:
