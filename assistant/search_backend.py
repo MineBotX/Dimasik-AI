@@ -67,7 +67,10 @@ class SearchResultParser(HTMLParser):
                 self.snippet_depth = 1
                 self.capture = "snippet"
                 if self.current is None:
-                    self.current = {"title": "", "url": "", "snippet": ""}
+                    if self.provider != "bing" and self.items:
+                        self.snippet_target = self.items[-1]
+                    else:
+                        self.current = {"title": "", "url": "", "snippet": ""}
 
     def handle_data(self, data):
         if self.title_active and self.current is not None:
