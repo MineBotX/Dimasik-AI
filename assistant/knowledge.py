@@ -1,0 +1,157 @@
+"""Private local memory and cautious online retrieval for Dimasik."""
+import html
+import re
+import sqlite3
+import time
+from html.parser import HTMLParser
+from urllib.parse import parse_qs, urlparse
+
+import requests
+
+
+class _DuckParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.items = []
+        self.current = None
+        self.capture = None
+        self.snippet = ""
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = attrs.get("class", "").split()
+        if tag == "a" and "result__a" in classes:
+            self.current = {"title": "", "url": attrs.get("href", ""), "snippet": ""}
+            self.capture = "title"
+        elif "result__snippet" in classes:
+            self.snippet = ""
+            self.capture = "snippet"
+
+    def handle_data(self, data):
+        if self.capture == "title" and self.current is not None:
+            self.current["title"] += data
+        elif self.capture == "snippet":
+            self.snippet += data
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.capture == "title" and self.current is not None:
+            self.items.append(self.current)
+            self.current = None
+            self.capture = None
+        elif self.capture == "snippet":
+            if self.items:
+                self.items[-1]["snippet"] = self.snippet.strip()
+            self.capture = None
+
+
+class LocalKnowledge:
+    """SQLite conversation memory stored only on this computer."""
+
+    STOP = {
+        "что", "это", "как", "где", "когда", "почему", "зачем", "кто", "или",
+        "для", "при", "про", "над", "под", "его", "она", "они", "мне", "меня",
+        "тебя", "твой", "твоя", "могу", "можно", "есть", "быть", "будет",
+        "расскажи", "объясни", "пожалуйста", "димасик", "найди", "интернете"
+    }
+
+    def __init__(self, path):
+        self.path = str(path)
+        with sqlite3.connect(self.path) as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    created REAL NOT NULL
+                )
+            """)
+            db.execute("CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created)")
+
+    @staticmethod
+    def _tokens(text):
+        return {
+            token for token in re.findall(r"[а-яёa-z0-9]{2,}", str(text).lower())
+            if token not in LocalKnowledge.STOP
+        }
+
+    def remember(self, question, answer, source="conversation"):
+        question = str(question).strip()[:2000]
+        answer = str(answer).strip()[:6000]
+        if not question or not answer:
+            return
+        with sqlite3.connect(self.path) as db:
+            db.execute(
+                "INSERT INTO memories(question, answer, source, created) VALUES (?, ?, ?, ?)",
+                (question, answer, source, time.time())
+            )
+
+    def find_similar(self, query, limit=3):
+        query_tokens = self._tokens(query)
+        if not query_tokens:
+            return []
+        with sqlite3.connect(self.path) as db:
+            rows = db.execute(
+                "SELECT question, answer, source, created FROM memories ORDER BY created DESC LIMIT 1500"
+            ).fetchall()
+        ranked = []
+        for question, answer, source, created in rows:
+            tokens = self._tokens(question)
+            if not tokens:
+                continue
+            score = len(query_tokens & tokens) / max(1, len(query_tokens | tokens))
+            if score >= 0.22:
+                ranked.append((score, question, answer, source, created))
+        ranked.sort(key=lambda item: (item[0], item[4]), reverse=True)
+        return ranked[:limit]
+
+    def search_web(self, query, limit=5):
+        try:
+            response = requests.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"},
+                timeout=12
+            )
+            response.raise_for_status()
+            parser = _DuckParser()
+            parser.feed(response.text)
+            results = []
+            for item in parser.items:
+                url = html.unescape(item.get("url", ""))
+                if url.startswith("//"):
+                    url = "https:" + url
+                if "duckduckgo.com/l/?" in url:
+                    target = parse_qs(urlparse(url).query).get("uddg", [])
+                    if target:
+                        url = target[0]
+                title = html.unescape(item.get("title", "")).strip()
+                snippet = html.unescape(item.get("snippet", "")).strip()
+                if title and url.startswith(("http://", "https://")):
+                    results.append({"title": title, "url": url, "snippet": snippet})
+                if len(results) >= limit:
+                    break
+            return {"online": bool(results), "results": results}
+        except (requests.RequestException, ValueError):
+            return {"online": False, "results": []}
+
+    @staticmethod
+    def format_web_answer(query, results):
+        lines = [f"По запросу «{query}» нашёл такие материалы:"]
+        for index, item in enumerate(results, 1):
+            snippet = item.get("snippet") or "В поисковой выдаче нет краткого описания."
+            lines.append(f"{index}. {item['title']}\n{snippet}\nИсточник: {item['url']}")
+        lines.append(
+            "Это выдержки из поисковой выдачи, а не проверенная истина. "
+            "Для важных решений открой источники и сравни несколько независимых публикаций."
+        )
+        return "\n\n".join(lines)
+
+    @staticmethod
+    def format_memory_answer(memories):
+        lines = ["Интернета сейчас нет. Нашёл похожие сведения в локальной памяти:"]
+        for _score, question, answer, source, _created in memories:
+            label = "прошлый разговор" if source == "conversation" else "ранее найденный материал"
+            lines.append(f"Вопрос: {question}\nОтвет: {answer}\nТип записи: {label}")
+        lines.append("Это сохранённые записи, а не обязательно актуальные или проверенные факты.")
+        return "\n\n".join(lines)
