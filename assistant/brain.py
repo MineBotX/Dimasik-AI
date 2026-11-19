@@ -86,9 +86,10 @@ def _backward_batch(
     probs = _softmax(state["logits"])
     smoothing = max(0.0, min(0.2, float(label_smoothing)))
     if smoothing:
-        probs *= 1.0 - smoothing
-        probs += smoothing / probs.shape[1]
-    probs[np.arange(batch_n), targets] -= 1.0
+        probs[np.arange(batch_n), targets] -= 1.0 - smoothing
+        probs -= smoothing / probs.shape[1]
+    else:
+        probs[np.arange(batch_n), targets] -= 1.0
     probs /= batch_n
 
     grad_w2 = hidden.T @ probs
