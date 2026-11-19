@@ -55,6 +55,18 @@ jobs:
           Invoke-WebRequest "https://github.com/ggml-org/llama.cpp/releases/download/b12328/llama-b12328-bin-win-cpu-x64.zip" -OutFile $runtimeZip
           Expand-Archive -LiteralPath $runtimeZip -DestinationPath tools/llama -Force
           if (!(Get-ChildItem tools/llama -Filter llama-server.exe -Recurse)) { throw "llama-server.exe was not found in the CPU runtime archive" }
+      - name: Download stable-diffusion.cpp Vulkan runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          New-Item -ItemType Directory -Force tools/stable-diffusion | Out-Null
+          $runtimeZip = "$env:TEMP/stable-diffusion-vulkan.zip"
+          Invoke-WebRequest "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip" -OutFile $runtimeZip
+          $actualHash = (Get-FileHash -LiteralPath $runtimeZip -Algorithm SHA256).Hash.ToLower()
+          if ($actualHash -ne "3e66222c87ca27074e1fd8ce79706eef17a8aaf39949906aa1bee7e060f22ecc") { throw "stable-diffusion.cpp runtime SHA-256 mismatch" }
+          Expand-Archive -LiteralPath $runtimeZip -DestinationPath tools/stable-diffusion -Force
+          if (!(Get-ChildItem tools/stable-diffusion -Filter sd-cli.exe -Recurse)) { throw "sd-cli.exe was not found in the Vulkan runtime archive" }
       - name: Train Dimasik neural core
         run: python train_brain.py
       - name: Build GUI executable
@@ -72,6 +84,7 @@ jobs:
           Copy-Item brain dist/Dimasik/brain -Recurse -Force
           New-Item -ItemType Directory -Force dist/Dimasik/tools | Out-Null
           Copy-Item tools/llama dist/Dimasik/tools/llama -Recurse -Force
+          Copy-Item tools/stable-diffusion dist/Dimasik/tools/stable-diffusion -Recurse -Force
           Copy-Item dist/Dimasik (Join-Path $package "Dimasik") -Recurse -Force
           Copy-Item install-runtime.ps1 $package
           Copy-Item Install-Dimasik.bat $package
