@@ -77,6 +77,12 @@ jobs:
 
           if (!(Get-ChildItem tools/stable-diffusion/cpu -Filter sd-cli.exe -Recurse)) { throw "CPU sd-cli.exe was not found" }
           if (!(Get-ChildItem tools/stable-diffusion/vulkan -Filter sd-cli.exe -Recurse)) { throw "Vulkan sd-cli.exe was not found" }
+          $cpuExe = (Get-ChildItem tools/stable-diffusion/cpu -Filter sd-cli.exe -Recurse | Select-Object -First 1).FullName
+          $vulkanExe = (Get-ChildItem tools/stable-diffusion/vulkan -Filter sd-cli.exe -Recurse | Select-Object -First 1).FullName
+          & $cpuExe --help *> $null
+          if ($LASTEXITCODE -ne 0) { throw "CPU sd-cli.exe could not start" }
+          & $vulkanExe --help *> $null
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan sd-cli.exe could not start" }
       - name: Train Dimasik neural core
         run: python train_brain.py
       - name: Build GUI executable
