@@ -77,7 +77,9 @@ def _pptx_text(path: Path) -> str:
 
     presentation = Presentation(str(path))
     pieces = []
-    for slide_number, slide in enumerate(presentation.slides[:100], start=1):
+    for slide_number, slide in enumerate(presentation.slides, start=1):
+        if slide_number > 100:
+            break
         pieces.append(f"Слайд {slide_number}:")
         for shape in slide.shapes:
             if getattr(shape, "has_text_frame", False):
