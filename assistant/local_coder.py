@@ -56,7 +56,7 @@ class LocalCoder:
             return matches[0]
         raise RuntimeError(
             "Не найден llama-server.exe. Установи свежую сборку Димасика "
-            "с локальным движком генерации кода."
+            "с локальным движком ИИ."
         )
 
     def download_model(self, progress=None, cancel_event=None) -> None:
@@ -147,8 +147,8 @@ class LocalCoder:
     def _start_server(self) -> None:
         if not self.model_installed:
             raise RuntimeError(
-                "Модель для самостоятельного написания кода ещё не установлена. "
-                "Нажми кнопку «Скачать модель кода» внизу окна Димасика. "
+                "Модель Granite для локального ИИ ещё не установлена. "
+                "Нажми кнопку «Модель ИИ» внизу окна Димасика. "
                 "Понадобится около 2,24 ГБ свободного места и интернет только на время загрузки."
             )
 
