@@ -153,8 +153,8 @@ class DimasikBrain:
                 version = int(np.asarray(data["format_version"]).reshape(-1)[0])
                 if version != MODEL_FORMAT_VERSION:
                     raise ValueError(
-                        f"Найдена DimaCore {version}. Для DimaCore 2.0 установи новую сборку "
-                        "или переобучи модель командой python train_brain.py."
+                        f"Формат весов версии {version} несовместим с DimaCore 2.0. "
+                        "Установи новую сборку или переобучи модель командой python train_brain.py."
                     )
                 required = set(PARAMETER_NAMES) | {"vocab", "format_version"}
                 if not required.issubset(set(data.files)):
