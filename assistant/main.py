@@ -22,6 +22,7 @@ from brain import DimasikBrain
 from github_manager import GitHubManager
 from email_manager import EmailManager
 from knowledge import LocalKnowledge
+from crosshair_api import start_server as start_crosshair_api
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -885,6 +886,15 @@ class DimasikApp:
 
 def main():
     global UI_APP
+    if CONFIG.get("crosshair_api_enabled", True):
+        try:
+            api_host = str(CONFIG.get("crosshair_api_host", "127.0.0.1"))
+            if api_host not in ("127.0.0.1", "localhost"):
+                api_host = "127.0.0.1"
+            api_server = start_crosshair_api(api_host, int(CONFIG.get("crosshair_api_port", 8765)))
+            print(f"API генерации прицелов: http://{api_host}:{api_server.server_port}")
+        except OSError as exc:
+            print("Не удалось запустить API генерации прицелов:", exc)
     root = tk.Tk()
     UI_APP = DimasikApp(root)
     root.mainloop()
