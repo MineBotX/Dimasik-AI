@@ -17,7 +17,8 @@ from pathlib import Path
 import requests
 
 MODEL_NAME = "Granite 4.2 3B Q4_K_M"
-MODEL_SIZE = 2_244_011_552
+MODEL_MIN_SIZE = 2_000_000_000
+MODEL_MAX_SIZE = 2_600_000_000
 MODEL_SHA256 = "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5"
 MODEL_URL = (
     "https://huggingface.co/ibm-granite/granite-4.2-3b-GGUF/resolve/"
@@ -39,7 +40,10 @@ class LocalCoder:
     @property
     def model_installed(self) -> bool:
         try:
-            return self.model_path.is_file() and self.model_path.stat().st_size == MODEL_SIZE
+            if not self.model_path.is_file():
+                return False
+            size = self.model_path.stat().st_size
+            return MODEL_MIN_SIZE <= size <= MODEL_MAX_SIZE
         except OSError:
             return False
 
@@ -59,7 +63,7 @@ class LocalCoder:
         """Downloads the pinned official IBM GGUF and verifies size and SHA-256."""
         self.model_path.parent.mkdir(parents=True, exist_ok=True)
         free_bytes = shutil.disk_usage(self.model_path.parent).free
-        if free_bytes < MODEL_SIZE + 512 * 1024 * 1024:
+        if free_bytes < MODEL_MAX_SIZE + 512 * 1024 * 1024:
             raise RuntimeError(
                 "Недостаточно места на диске. Для модели нужно около 2,24 ГБ "
                 "плюс временное место для проверки файла."
@@ -67,7 +71,8 @@ class LocalCoder:
 
         if self.model_installed:
             if progress:
-                progress(100, MODEL_SIZE, MODEL_SIZE)
+                size = self.model_path.stat().st_size
+                progress(100, size, size)
             return
 
         partial = self.model_path.with_suffix(self.model_path.suffix + ".part")
@@ -89,9 +94,9 @@ class LocalCoder:
             ) as response:
                 response.raise_for_status()
                 content_length = int(response.headers.get("Content-Length", "0") or 0)
-                if content_length and content_length != MODEL_SIZE:
+                if content_length and not MODEL_MIN_SIZE <= content_length <= MODEL_MAX_SIZE:
                     raise RuntimeError(
-                        f"Сервер сообщил неожиданный размер модели: {content_length:,} байт."
+                        f"Размер файла не похож на ожидаемую модель Granite: {content_length:,} байт."
                     )
                 with partial.open("wb") as output:
                     for chunk in response.iter_content(chunk_size=4 * 1024 * 1024):
@@ -102,14 +107,14 @@ class LocalCoder:
                         output.write(chunk)
                         digest.update(chunk)
                         downloaded += len(chunk)
-                        percent = min(99, int(downloaded * 100 / MODEL_SIZE))
+                        percent = min(99, int(downloaded * 100 / content_length)) if content_length else 0
                         if progress and percent != last_percent:
-                            progress(percent, downloaded, MODEL_SIZE)
+                            progress(percent, downloaded, content_length or 0)
                             last_percent = percent
 
-            if downloaded != MODEL_SIZE:
+            if not MODEL_MIN_SIZE <= downloaded <= MODEL_MAX_SIZE:
                 raise RuntimeError(
-                    f"Загрузка неполная: получено {downloaded:,} из {MODEL_SIZE:,} байт."
+                    f"Неожиданный размер модели: {downloaded:,} байт."
                 )
             actual_hash = digest.hexdigest()
             if actual_hash.lower() != MODEL_SHA256:
@@ -118,7 +123,7 @@ class LocalCoder:
                 )
             os.replace(partial, self.model_path)
             if progress:
-                progress(100, MODEL_SIZE, MODEL_SIZE)
+                progress(100, downloaded, downloaded)
         except Exception:
             try:
                 partial.unlink()
