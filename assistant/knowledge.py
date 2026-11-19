@@ -4,7 +4,11 @@ import sqlite3
 import time
 
 import requests
-from search_backend import parse_search_results
+
+try:
+    from .search_backend import parse_search_results
+except ImportError:  # Running main.py directly from the assistant folder.
+    from search_backend import parse_search_results
 
 
 class LocalKnowledge:
