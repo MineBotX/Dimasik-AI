@@ -18,7 +18,7 @@ import pyttsx3
 import requests
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model
-from assistant.brain import DimasikBrain
+from brain import DimasikBrain
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
