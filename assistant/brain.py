@@ -70,7 +70,10 @@ def _forward_batch(token_ids: np.ndarray, params: dict[str, np.ndarray], cache: 
     }
 
 
-def _backward_batch(targets: np.ndarray, params: dict[str, np.ndarray], state: dict) -> dict[str, np.ndarray]:
+def _backward_batch(
+    targets: np.ndarray, params: dict[str, np.ndarray], state: dict,
+    label_smoothing: float = 0.0,
+) -> dict[str, np.ndarray]:
     """Ручное обратное распространение для attention-блока и выходного классификатора."""
     x = state["x"]
     last = state["last"]
@@ -81,6 +84,10 @@ def _backward_batch(targets: np.ndarray, params: dict[str, np.ndarray], state: d
     batch_n, _, dim = x.shape
 
     probs = _softmax(state["logits"])
+    smoothing = max(0.0, min(0.2, float(label_smoothing)))
+    if smoothing:
+        probs *= 1.0 - smoothing
+        probs += smoothing / probs.shape[1]
     probs[np.arange(batch_n), targets] -= 1.0
     probs /= batch_n
 
@@ -283,10 +290,15 @@ class DimasikBrain:
 
 def _make_examples(sentences, ids):
     examples = []
+    unknown_id = ids[UNK]
     for sentence in sentences:
-        encoded = [ids.get(word, 0) for word in ([BOS] * CONTEXT_SIZE + sentence + [EOS])]
+        encoded = [ids.get(word, unknown_id) for word in ([BOS] * CONTEXT_SIZE + sentence + [EOS])]
         for pos in range(CONTEXT_SIZE, len(encoded)):
-            examples.append((encoded[pos - CONTEXT_SIZE:pos], encoded[pos]))
+            target = encoded[pos]
+            # Не тратим выходные параметры на редкие слова, которые генератор
+            # всё равно не сможет надёжно воспроизводить из малого корпуса.
+            if target != unknown_id:
+                examples.append((encoded[pos - CONTEXT_SIZE:pos], target))
     return examples
 
 
@@ -325,10 +337,10 @@ def _save_model(model_path, vocab, params):
             pass
 
 
-def train(data_path=None, epochs=60, embedding_size=48, hidden_size=128,
-          learning_rate=0.0015, model_path=None, validation_split=0.15,
-          patience=10, seed=2026):
-    """Обучает DimaCore 2.0 с attention, Adam, clipping и early stopping."""
+def train(data_path=None, epochs=60, embedding_size=32, hidden_size=64,
+          learning_rate=0.001, model_path=None, validation_split=0.15,
+          patience=12, seed=2026, min_token_frequency=2):
+    """Обучает DimaCore 2.0 с attention и регуляризацией для малого корпуса."""
     data_path = Path(data_path or ROOT / "training_data.txt")
     model_path = Path(model_path or MODEL_PATH)
     raw_lines = data_path.read_text(encoding="utf-8").splitlines()
@@ -357,8 +369,16 @@ def train(data_path=None, epochs=60, embedding_size=48, hidden_size=128,
     else:
         train_sentences, val_sentences = sentences, []
 
-    all_tokens = {token for sentence in sentences for token in sentence}
-    vocab = [UNK, BOS, EOS] + sorted(all_tokens - {UNK, BOS, EOS})
+    min_token_frequency = max(1, min(20, int(min_token_frequency)))
+    token_counts = {}
+    for sentence in sentences:
+        for token in sentence:
+            token_counts[token] = token_counts.get(token, 0) + 1
+    frequent_tokens = {
+        token for token, count in token_counts.items()
+        if count >= min_token_frequency and token not in {UNK, BOS, EOS}
+    }
+    vocab = [UNK, BOS, EOS] + sorted(frequent_tokens)
     ids = {word: i for i, word in enumerate(vocab)}
     train_examples = _make_examples(train_sentences, ids)
     val_examples = _make_examples(val_sentences, ids)
@@ -399,7 +419,7 @@ def train(data_path=None, epochs=60, embedding_size=48, hidden_size=128,
             x_ids = np.asarray([item[0] for item in batch], dtype=np.int64)
             targets = np.asarray([item[1] for item in batch], dtype=np.int64)
             _logits, state = _forward_batch(x_ids, params, cache=True)
-            grads = _backward_batch(targets, params, state)
+            grads = _backward_batch(targets, params, state, label_smoothing=0.04)
 
             grad_norm = float(np.sqrt(sum(float(np.sum(g * g)) for g in grads.values())))
             if not np.isfinite(grad_norm):
@@ -416,7 +436,7 @@ def train(data_path=None, epochs=60, embedding_size=48, hidden_size=128,
                 m_hat = first_moments[name] / (1.0 - beta1 ** step)
                 v_hat = second_moments[name] / (1.0 - beta2 ** step)
                 # Небольшой AdamW weight decay только для матриц весов.
-                decay = 1e-4 * params[name] if name in {"wq", "wk", "wv", "wo", "w1", "w2"} else 0.0
+                decay = 1e-3 * params[name] if name in {"wq", "wk", "wv", "wo", "w1", "w2"} else 0.0
                 params[name] -= learning_rate * (m_hat / (np.sqrt(v_hat) + 1e-8) + decay)
 
         train_loss = _loss_for_examples(train_examples, params)
