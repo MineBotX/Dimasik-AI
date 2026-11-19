@@ -34,7 +34,7 @@ def _description_to_spec(description: str) -> dict:
         if key in text:
             color = value
             break
-    hex_match = re.search(r"#[0-9a-f]{6}\\b", text)
+    hex_match = re.search(r"#[0-9a-f]{6}\b", text)
     if hex_match:
         color = hex_match.group(0)
     thickness = 4 if any(w in text for w in ("толст", "жирн")) else 2
@@ -139,10 +139,10 @@ def make_png(spec: dict) -> bytes:
                     paint(px, py, (0, 0, 0))
                 if inside(item, x, y):
                     paint(px, py, color)
-    raw = b"".join(b"\\x00" + bytes(pixels[y*width*4:(y+1)*width*4]) for y in range(height))
+    raw = b"".join(b"\x00" + bytes(pixels[y*width*4:(y+1)*width*4]) for y in range(height))
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
-    return (b"\\x89PNG\\r\\n\\x1a\\n" +
+    return (b"\x89PNG\r\n\x1a\n" +
             chunk(b"IHDR", struct.pack(">2I5B", width, height, 8, 6, 0, 0, 0)) +
             chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
 
