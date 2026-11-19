@@ -7,6 +7,7 @@ from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlparse
 
 import requests
+from search_backend import parse_search_results
 
 
 class _DuckParser(HTMLParser):
@@ -107,51 +108,56 @@ class LocalKnowledge:
         return ranked[:limit]
 
     def search_web(self, query, limit=5):
-        """Try multiple public DuckDuckGo endpoints before reporting search failure."""
-        query = str(query).strip()
+        """Search public engines with fallbacks; no API key or paid service is used."""
+        query = str(query or "").strip()
         if not query:
             return {"online": False, "results": [], "error": "Пустой поисковый запрос."}
 
-        endpoints = (
-            "https://html.duckduckgo.com/html/",
-            "https://lite.duckduckgo.com/lite/",
+        engines = (
+            ("DuckDuckGo", "https://html.duckduckgo.com/html/", "duckduckgo"),
+            ("Bing", "https://www.bing.com/search", "bing"),
+            ("DuckDuckGo Lite", "https://lite.duckduckgo.com/lite/", "duckduckgo"),
         )
-        errors = []
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Cache-Control": "no-cache",
         }
-        for endpoint in endpoints:
-            try:
-                response = requests.get(endpoint, params={"q": query}, headers=headers, timeout=15)
-                response.raise_for_status()
-                parser = _DuckParser()
-                parser.feed(response.text)
-                results = []
-                for item in parser.items:
-                    url = html.unescape(item.get("url", "")).strip()
-                    if url.startswith("//"):
-                        url = "https:" + url
-                    if "duckduckgo.com/l/?" in url:
-                        target = parse_qs(urlparse(url).query).get("uddg", [])
-                        if target:
-                            url = target[0]
-                    title = html.unescape(item.get("title", "")).strip()
-                    snippet = html.unescape(item.get("snippet", "")).strip()
-                    if title and url.startswith(("http://", "https://")):
-                        results.append({"title": title, "url": url, "snippet": snippet})
-                    if len(results) >= limit:
-                        break
-                if results:
-                    return {"online": True, "results": results}
-                errors.append(f"{urlparse(endpoint).netloc}: страница открылась, но результаты не распознаны")
-            except requests.RequestException as exc:
-                errors.append(f"{urlparse(endpoint).netloc}: {exc.__class__.__name__}")
-            except (ValueError, TypeError) as exc:
-                errors.append(f"{urlparse(endpoint).netloc}: {exc.__class__.__name__}")
+        errors = []
+        limit = max(1, min(10, int(limit)))
 
-        return {"online": False, "results": [], "error": "; ".join(errors) or "Поиск не вернул результатов."}
+        for engine_name, endpoint, parser_name in engines:
+            try:
+                response = requests.get(
+                    endpoint,
+                    params={"q": query},
+                    headers=headers,
+                    timeout=(5, 12),
+                )
+                response.raise_for_status()
+                results = parse_search_results(response.text, parser_name, limit=limit)
+                if results:
+                    return {
+                        "online": True,
+                        "results": results,
+                        "engine": engine_name,
+                    }
+                errors.append(f"{engine_name}: страница открылась, но выдачу распознать не удалось")
+            except requests.RequestException as exc:
+                errors.append(f"{engine_name}: {exc.__class__.__name__}")
+            except (ValueError, TypeError) as exc:
+                errors.append(f"{engine_name}: {exc.__class__.__name__}")
+
+        return {
+            "online": False,
+            "results": [],
+            "error": "; ".join(errors) or "Поисковые системы не вернули результаты.",
+        }
 
     @staticmethod
     def format_web_answer(query, results):
