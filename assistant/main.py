@@ -353,7 +353,7 @@ def ask_local_ai(prompt):
         context = " ".join(item["content"] for item in list(history)[-4:])
         answer = BRAIN.answer(context)
         if not BRAIN.ready:
-            answer = "Для полноценного диалога скачай локальную модель ИИ кнопкой внизу окна. Пока доступно экспериментальное ядро DimaCore. " + answer
+            answer = "Для полноценного диалога скачай локальную модель ИИ кнопкой внизу окна. Пока доступно экспериментальное ядро DimaCore 2.0. " + answer
     history.append({"role": "assistant", "content": answer})
     if not is_file_analysis:
         KNOWLEDGE.remember(prompt, answer, source="conversation")
@@ -722,7 +722,7 @@ class DimasikApp:
         )
         tk.Label(
             self.root,
-            text="Локальный помощник  •  Vosk  •  DimaCore  •  Granite  •  Stable Diffusion",
+            text="Локальный помощник  •  Vosk  •  DimaCore 2.0  •  Granite  •  Stable Diffusion",
             bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
         ).pack()
 
