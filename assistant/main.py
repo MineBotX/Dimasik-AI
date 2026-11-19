@@ -25,6 +25,7 @@ from knowledge import LocalKnowledge
 from crosshair_api import start_server as start_crosshair_api
 from code_writer import is_code_request
 from local_coder import LocalCoder
+from dialogue import conversational_reply
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -199,35 +200,6 @@ def brain_ready():
     return BRAIN.ready
 
 
-def conversational_reply(prompt):
-    """Offline dialogue layer for common social turns and follow-ups."""
-    text = str(prompt).strip().lower()
-    previous = next((item["content"].lower() for item in reversed(list(history)[:-1]) if item.get("role") == "user"), "")
-    if any(x in text for x in ("привет", "здравствуй", "доброе утро", "добрый вечер", "хай")):
-        return "Привет! Рад тебя слышать. Как у тебя дела?"
-    if any(x in text for x in ("как дела", "как ты", "как настроение", "как сам")):
-        return "У меня всё отлично! Я на связи и готов поболтать. А у тебя как настроение?"
-    if any(x in text for x in ("что делаешь", "чем занят", "что нового")):
-        return "Сейчас общаюсь с тобой и готов помочь. О чём поговорим?"
-    if any(x in text for x in ("спасибо", "благодарю", "спс")):
-        return "Всегда пожалуйста! Обращайся, мне приятно помогать."
-    if any(x in text for x in ("пока", "до свидания", "до встречи")):
-        return "Давай! Было приятно пообщаться. Я буду здесь, когда понадоблюсь."
-    if any(x in text for x in ("расскажи шутку", "пошути", "анекдот")):
-        return "Почему программист не любит природу? Там слишком много багов! Ха-ха! Рассказать ещё одну?"
-    if any(x in text for x in ("мне грустно", "плохо на душе", "я расстроен", "мне одиноко")):
-        return "Мне жаль, что тебе сейчас нелегко. Хочешь рассказать, что случилось? Я тебя выслушаю."
-    if any(x in text for x in ("я рад", "я счастлив", "всё отлично", "у меня хорошее настроение")):
-        return "Вот это здорово! Рад за тебя! Что сегодня порадовало?"
-    if text in ("а ты?", "а у тебя?", "а сам?", "и ты?"):
-        return "У меня всё хорошо, спасибо, что спросил!" if any(x in previous for x in ("дела", "настроение")) else "Я здесь и внимательно слушаю тебя. Что обсудим?"
-    if any(x in text for x in ("кто ты", "как тебя зовут", "представься")):
-        return "Я Димасик, твой локальный помощник. Моё экспериментальное нейросетевое ядро называется DimaCore."
-    if any(x in text for x in ("скучно", "нечего делать", "давай поговорим")):
-        return "Давай поболтаем! Можем обсудить игры, фильмы, технологии или твой день. Что выбираешь?"
-    return None
-
-
 class _SearchParser(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParser):
     """Extracts titles and snippets from DuckDuckGo HTML results."""
     def __init__(self):
@@ -327,6 +299,14 @@ def ask_local_ai(prompt):
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
 
+    # Handle greetings and identity questions before web search. They do not
+    # require internet and should never fall through to the fact-search path.
+    answer = conversational_reply(prompt, history[:-1])
+    if answer is not None:
+        history.append({"role": "assistant", "content": answer})
+        KNOWLEDGE.remember(prompt, answer, source="conversation")
+        return answer
+
     explicit_prefixes = ("найди в интернете ", "поищи в интернете ", "поищи информацию о ", "найди информацию о ")
     explicit = next((prefix for prefix in explicit_prefixes if lowered.startswith(prefix)), None)
     query = normalized[len(explicit):].strip() if explicit else normalized
@@ -348,12 +328,10 @@ def ask_local_ai(prompt):
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
 
-    answer = conversational_reply(prompt)
-    if answer is None:
-        context = " ".join(item["content"] for item in list(history)[-4:])
-        answer = BRAIN.answer(context)
-        if not BRAIN.ready:
-            answer = "Я пока учусь поддерживать свободный разговор. " + answer
+    context = " ".join(item["content"] for item in list(history)[-4:])
+    answer = BRAIN.answer(context)
+    if not BRAIN.ready:
+        answer = "Я пока учусь поддерживать свободный разговор. " + answer
     history.append({"role": "assistant", "content": answer})
     KNOWLEDGE.remember(prompt, answer, source="conversation")
     return answer
