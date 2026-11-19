@@ -405,7 +405,7 @@ def execute_command(command):
         ctypes.windll.user32.LockWorkStation()
         return True
 
-    if command.startswith(("найди в интернете ", "поищи в интернете ", "найди ", "поиск ", "загугли ")):
+    if command.startswith(("найди в интернете ", "поищи в интернете ", "найди ", "поищи ", "поиск ", "загугли ")):
         query = command.split(" ", 1)[1].strip()
         if query:
             # Голосовой поиск использует тот же механизм, что и текстовый чат.
