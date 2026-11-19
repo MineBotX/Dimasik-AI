@@ -23,7 +23,8 @@ from github_manager import GitHubManager
 from email_manager import EmailManager
 from knowledge import LocalKnowledge
 from crosshair_api import start_server as start_crosshair_api
-from code_writer import is_code_request, generate_code
+from code_writer import is_code_request
+from local_coder import LocalCoder
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -85,6 +86,7 @@ CONFIG = load_config()
 ASSISTANT_NAME = str(CONFIG.get("assistant_name", "Димасик"))
 BRAIN = DimasikBrain()
 KNOWLEDGE = LocalKnowledge(ROOT / "brain" / "knowledge.sqlite3")
+CODE_WRITER = LocalCoder(ROOT)
 WAKE_WORDS = tuple(CONFIG["wake_words"])
 tts = pyttsx3.init()
 tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
@@ -315,10 +317,12 @@ def ask_local_ai(prompt):
     normalized = str(prompt).strip()
     lowered = normalized.lower()
 
-    # Code requests use a reviewed offline template path, not free-form
-    # next-token prediction from the tiny experimental DimaCore model.
+    # Generate original code with the local Granite model, not templates.
     if is_code_request(normalized):
-        answer = generate_code(normalized)
+        try:
+            answer = CODE_WRITER.generate(normalized, conversation=list(history)[:-1])
+        except Exception as exc:
+            answer = "Не получилось запустить локальную модель для написания кода: " + str(exc)
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
@@ -585,6 +589,14 @@ class DimasikApp:
                   relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
         tk.Button(actions, text="✉ Почта", command=self.open_email, bg=self.PANEL2, fg=self.TEXT,
                   relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
+        self.coder_btn = tk.Button(
+            actions,
+            text="Кодовая модель установлена" if CODE_WRITER.model_installed else "Скачать модель кода (≈2,24 ГБ)",
+            command=self.download_coder_model,
+            bg=self.PANEL2, fg=self.GREEN if CODE_WRITER.model_installed else self.ACCENT,
+            relief="flat", padx=10, pady=7, cursor="hand2",
+        )
+        self.coder_btn.pack(side="left", padx=5)
         tk.Button(actions, text="Очистить чат", command=self.clear_chat,
                   bg=self.PANEL2, fg=self.MUTED, activebackground="#263653", relief="flat",
                   font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2").pack(side="right")
@@ -603,6 +615,48 @@ class DimasikApp:
         self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
         tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции отдельно",
                  bg=self.BG, fg="#667995", font=("Segoe UI", 7), pady=4).pack()
+
+    def download_coder_model(self):
+        if CODE_WRITER.model_installed:
+            messagebox.showinfo("Модель кода", "Модель Granite уже установлена.")
+            return
+        if not messagebox.askyesno(
+            "Скачать модель кода",
+            "Будет скачана локальная модель Granite 4.2 3B размером около 2,24 ГБ. "
+            "Она работает на этом компьютере и не требует платного API. "
+            "Для загрузки нужен интернет и примерно 3 ГБ свободного места. Продолжить?",
+        ):
+            return
+        self.coder_btn.configure(state="disabled", text="Загрузка модели: 0%")
+        threading.Thread(target=self._download_coder_worker, daemon=True).start()
+
+    def _download_coder_worker(self):
+        result = None
+        error = None
+
+        def progress(percent, downloaded, total):
+            if total:
+                label = f"Загрузка модели: {percent}% ({downloaded / 1_000_000_000:.2f} / {total / 1_000_000_000:.2f} ГБ)"
+            else:
+                label = f"Загрузка модели: {downloaded / 1_000_000_000:.2f} ГБ"
+            self.root.after(0, lambda value=label: self.coder_btn.configure(text=value))
+
+        try:
+            CODE_WRITER.download_model(progress=progress)
+            result = "Модель Granite загружена и проверена. Теперь Димасик может писать новый код локально."
+        except Exception as exc:
+            error = str(exc)
+
+        def finish():
+            if error:
+                self.coder_btn.configure(state="normal", text="Повторить загрузку модели")
+                messagebox.showerror("Модель кода", error)
+            else:
+                self.coder_btn.configure(
+                    state="normal", text="Кодовая модель установлена", fg=self.GREEN
+                )
+                messagebox.showinfo("Модель кода", result)
+        self.root.after(0, finish)
 
     def set_mood(self, mood):
         emoji, label, color = mood
@@ -905,6 +959,10 @@ class DimasikApp:
 
     def close(self):
         self.running.clear()
+        try:
+            CODE_WRITER.stop()
+        except Exception:
+            pass
         try:
             tts.stop()
         except Exception:
