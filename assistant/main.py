@@ -192,7 +192,7 @@ def brain_ready():
 def conversational_reply(prompt):
     """Offline dialogue layer for common social turns and follow-ups."""
     text = str(prompt).strip().lower()
-    previous = next((item["content"].lower() for item in reversed(history) if item.get("role") == "user"), "")
+    previous = next((item["content"].lower() for item in reversed(list(history)[:-1]) if item.get("role") == "user"), "")
     if any(x in text for x in ("привет", "здравствуй", "доброе утро", "добрый вечер", "хай")):
         return "Привет! Рад тебя слышать. Как у тебя дела?"
     if any(x in text for x in ("как дела", "как ты", "как настроение", "как сам")):
