@@ -6,8 +6,8 @@ import numpy as np
 
 from assistant.brain import (
     BOS, CONTEXT_SIZE, EOS, MODEL_FORMAT_VERSION, PARAMETER_NAMES,
-    DimasikBrain, _backward_batch, _forward_batch, _softmax, _save_model,
-    tokenize, train,
+    DimasikBrain, _backward_batch, _forward_batch, _make_examples,
+    _softmax, _save_model, tokenize, train,
 )
 
 
@@ -54,11 +54,15 @@ class DimaCore20Tests(unittest.TestCase):
         )
         targets = np.asarray([3, 4], dtype=np.int64)
         _logits, state = _forward_batch(x_ids, params, cache=True)
-        grads = _backward_batch(targets, params, state)
+        smoothing = 0.04
+        grads = _backward_batch(targets, params, state, label_smoothing=smoothing)
 
         def loss():
             probs = _softmax(_forward_batch(x_ids, params))
-            return float(-np.log(probs[np.arange(2), targets]).mean())
+            log_probs = np.log(np.maximum(probs, 1e-12))
+            selected = log_probs[np.arange(2), targets]
+            uniform = log_probs.mean(axis=1)
+            return float(-((1.0 - smoothing) * selected + smoothing * uniform).mean())
 
         checks = (
             ("embeddings", (2, 3)),
@@ -87,6 +91,12 @@ class DimaCore20Tests(unittest.TestCase):
                     float(grads[name][index]), numerical, delta=2e-3
                 )
 
+    def test_rare_targets_are_skipped_after_vocabulary_pruning(self):
+        ids = {"<unk>": 0, "<bos>": 1, "<eos>": 2, "я": 3, "слово": 4}
+        examples = _make_examples([["я", "редкое", "слово"]], ids)
+        self.assertEqual(len(examples), 3)
+        self.assertTrue(all(target != ids["<unk>"] for _context, target in examples))
+
     def test_train_save_load_and_generate(self):
         samples = [
             "привет я димасик и я готов тебе помочь сегодня",
@@ -113,6 +123,7 @@ class DimaCore20Tests(unittest.TestCase):
                 validation_split=0.25,
                 patience=4,
                 seed=7,
+                min_token_frequency=2,
             )
             self.assertGreater(vocab_size, 3)
             self.assertGreater(example_count, 10)
