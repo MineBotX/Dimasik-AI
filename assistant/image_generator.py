@@ -21,7 +21,10 @@ MODEL_URL = (
     "dcac270609fffc0ce7c7d41a3c0e752721859f7c/stable-diffusion-v1-5-Q4_0.gguf"
 )
 ENGINE_RELEASE = "master-1106-532d2c1"
-ENGINE_ASSET = "sd-master-532d2c1-bin-win-vulkan-x64.zip"
+ENGINE_CPU_ASSET = "sd-master-532d2c1-bin-win-cpu-x64.zip"
+ENGINE_CPU_SHA256 = "abef332cfca7861cc567910e79bedb70bfb2920bb4eedac97fcbb6db477f1596"
+ENGINE_VULKAN_ASSET = "sd-master-532d2c1-bin-win-vulkan-x64.zip"
+ENGINE_VULKAN_SHA256 = "3e66222c87ca27074e1fd8ce79706eef17a8aaf39949906aa1bee7e060f22ecc"
 
 _IMAGE_START = re.compile(
     r"^\s*(нарисуй|изобрази|рисуй|draw)\b|"
@@ -150,25 +153,15 @@ class LocalImageGenerator:
                 pass
             raise
 
-    def _find_executable(self) -> Path:
-        preferred = self.engine_root / "sd-cli.exe"
+    def _find_executable(self, backend: str) -> Path | None:
+        folder = self.engine_root / backend
+        preferred = folder / "sd-cli.exe"
         if preferred.is_file():
             return preferred
-        matches = (
-            list(self.engine_root.rglob("sd-cli.exe"))
-            if self.engine_root.exists()
-            else []
-        )
-        if matches:
-            return matches[0]
-        raise RuntimeError(
-            "Не найден sd-cli.exe. Установи свежую сборку Димасика с движком "
-            "локальной генерации изображений."
-        )
+        matches = list(folder.rglob("sd-cli.exe")) if folder.exists() else []
+        return matches[0] if matches else None
 
-    def list_backends(self) -> str:
-        """Return installed backend/device names for diagnostics."""
-        executable = self._find_executable()
+    def _list_devices(self, executable: Path) -> str:
         result = subprocess.run(
             [str(executable), "--list-devices"],
             cwd=str(executable.parent),
@@ -183,7 +176,27 @@ class LocalImageGenerator:
             raise RuntimeError(
                 (result.stderr or result.stdout or "Не удалось определить устройства")[-2500:]
             )
-        return result.stdout + "\n" + result.stderr
+        return result.stdout + "\\n" + result.stderr
+
+    def _select_runtime(self) -> tuple[Path, str]:
+        """Prefer Vulkan when available; fall back to the independent CPU build."""
+        vulkan_exe = self._find_executable("vulkan")
+        if vulkan_exe is not None:
+            try:
+                devices = self._list_devices(vulkan_exe).lower()
+                if "vulkan" in devices:
+                    return vulkan_exe, "auto"
+            except (OSError, RuntimeError, subprocess.SubprocessError):
+                pass
+
+        cpu_exe = self._find_executable("cpu")
+        if cpu_exe is not None:
+            return cpu_exe, "cpu"
+
+        raise RuntimeError(
+            "Не найден ни рабочий Vulkan-движок, ни CPU-движок sd-cli.exe. "
+            "Переустанови последнюю сборку Димасика."
+        )
 
     def generate(
         self,
@@ -206,52 +219,76 @@ class LocalImageGenerator:
                 "«Скачать модель изображений»."
             )
 
-        executable = self._find_executable()
+        executable, backend = self._select_runtime()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         output_path = self.output_dir / (
             time.strftime("dimasik_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:8] + ".png"
         )
 
-        # Vulkan build automatically chooses a suitable GPU when possible and
-        # falls back to the CPU backend when no usable GPU backend is available.
-        command = [
-            str(executable),
-            "-m", str(self.model_path),
-            "-p", visual_prompt,
-            "-o", str(output_path),
-            "-W", str(max(256, min(768, int(width)))),
-            "-H", str(max(256, min(768, int(height)))),
-            "--steps", str(max(8, min(40, int(steps)))),
-            "--sampling-method", "euler_a",
-            "--cfg-scale", "7.0",
-            "--backend", "auto",
-            "--threads", str(max(2, min(16, os.cpu_count() or 4))),
-            "--vae-tiling",
-        ]
+        def build_command(engine: Path, selected_backend: str):
+            return [
+                str(engine),
+                "-m", str(self.model_path),
+                "-p", visual_prompt,
+                "-o", str(output_path),
+                "-W", str(max(256, min(768, int(width)))),
+                "-H", str(max(256, min(768, int(height)))),
+                "--steps", str(max(8, min(40, int(steps)))),
+                "--sampling-method", "euler_a",
+                "--cfg-scale", "7.0",
+                "--backend", selected_backend,
+                "--threads", str(max(2, min(16, os.cpu_count() or 4))),
+                "--vae-tiling",
+            ]
+
         if progress:
-            progress("Создаю изображение локально. Это может занять несколько минут.")
-
-        try:
-            result = subprocess.run(
-                command,
-                cwd=str(executable.parent),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=3600,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            progress(
+                "Создаю изображение локально через "
+                + ("Vulkan" if backend == "auto" else "CPU")
+                + ". Это может занять несколько минут."
             )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                "Генерация превысила лимит в 60 минут. Попробуй позже или уменьши нагрузку."
-            ) from exc
-        except OSError as exc:
-            raise RuntimeError(f"Не удалось запустить движок изображений: {exc}") from exc
 
-        if result.returncode != 0 or not output_path.is_file():
-            details = (result.stderr or "") + "\n" + (result.stdout or "")
-            details = details.strip()[-4500:]
+        attempts = [(executable, backend)]
+        if backend != "cpu":
+            cpu_exe = self._find_executable("cpu")
+            if cpu_exe is not None:
+                attempts.append((cpu_exe, "cpu"))
+
+        result = None
+        last_details = ""
+        for engine, selected_backend in attempts:
+            if output_path.exists():
+                try:
+                    output_path.unlink()
+                except OSError:
+                    pass
+            try:
+                result = subprocess.run(
+                    build_command(engine, selected_backend),
+                    cwd=str(engine.parent),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=3600,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    "Генерация превысила лимит в 60 минут. Попробуй позже или уменьши нагрузку."
+                ) from exc
+            except OSError as exc:
+                last_details = str(exc)
+                continue
+
+            if result.returncode == 0 and output_path.is_file():
+                break
+
+            last_details = (
+                (result.stderr or "") + "\\n" + (result.stdout or "")
+            ).strip()[-4500:]
+
+        if result is None or result.returncode != 0 or not output_path.is_file():
             if output_path.exists():
                 try:
                     output_path.unlink()
@@ -259,7 +296,7 @@ class LocalImageGenerator:
                     pass
             raise RuntimeError(
                 "Движок не смог создать изображение."
-                + (("\nПодробности: " + details) if details else "")
+                + (("\\nПодробности: " + last_details) if last_details else "")
             )
 
         if output_path.stat().st_size < 1024:
