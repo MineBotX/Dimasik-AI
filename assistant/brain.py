@@ -364,7 +364,7 @@ def train(data_path=None, epochs=60, embedding_size=48, hidden_size=192,
             print(f"Epoch {epoch + 1}/{epochs} - train_loss: {train_loss:.4f}; {label}: {monitored_loss:.4f}")
 
         if epochs_without_improvement >= patience:
-            print(f"Early stopping: нет улучшения {patience} эпох.")
+            print(f"Early stopping: no improvement for {patience} epochs.")
             break
 
     if best_params is None:
