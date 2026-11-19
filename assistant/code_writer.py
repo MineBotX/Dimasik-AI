@@ -11,27 +11,27 @@ import ast
 def is_code_request(prompt):
     text = str(prompt or "").lower()
     return bool(re.search(
-        r"\\b(напиши|создай|сгенерируй|сделай|разработай|покажи)\\b.{0,70}\\b("
-        r"код|программ|скрипт|сайт|калькулятор|игр|бот|api)\\b|"
-        r"\\b(write|generate|create|build)\\b.{0,70}\\b(code|script|program|website|calculator|api)\\b",
+        r"\b(напиши|создай|сгенерируй|сделай|разработай|покажи)\b.{0,70}\b("
+        r"код|программ|скрипт|сайт|калькулятор|игр|бот|api)\b|"
+        r"\b(write|generate|create|build)\b.{0,70}\b(code|script|program|website|calculator|api)\b",
         text,
     )) or text.strip().startswith(("код на ", "программа на ", "сайт на "))
 
 
 def _language(text):
-    if re.search(r"\\b(html|сайт|веб[- ]страниц|страниц[ау] сайта)\\b", text):
+    if re.search(r"\b(html|сайт|веб[- ]страниц|страниц[ау] сайта)\b", text):
         return "html"
-    if re.search(r"\\b(язык\\s*)?(javascript|js)\\b", text):
+    if re.search(r"\b(язык\s*)?(javascript|js)\b", text):
         return "javascript"
-    if re.search(r"\\b(c\\+\\+|cpp)\\b", text):
+    if re.search(r"\b(c\\+\\+|cpp)\b", text):
         return "cpp"
-    if re.search(r"\\b(java)\\b", text):
+    if re.search(r"\b(java)\b", text):
         return "java"
     return "python"
 
 
 def _python_calculator():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         """Простой консольный калькулятор."""
         def calculate(a: float, operator: str, b: float) -> float:
             if operator == "+":
@@ -66,7 +66,7 @@ def _python_calculator():
 
 
 def _python_guess_game():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         """Игра: угадай число от 1 до 100."""
         import random
 
@@ -102,7 +102,7 @@ def _python_guess_game():
 
 
 def _python_todo():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         """Консольный список задач с сохранением в JSON."""
         import json
         from pathlib import Path
@@ -153,7 +153,7 @@ def _python_todo():
 
 
 def _python_api():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         """Минимальный JSON API на стандартной библиотеке Python."""
         import json
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -206,7 +206,7 @@ def _python_api():
 
 
 def _html_page():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         <!doctype html>
         <html lang="ru">
         <head>
@@ -247,7 +247,7 @@ def _html_page():
 
 
 def _js_calculator():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         // Безопасный калькулятор без eval().
         function calculate(first, operator, second) {
           const a = Number(first);
@@ -271,7 +271,7 @@ def _js_calculator():
 
 
 def _cpp_calculator():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         #include <iostream>
         using namespace std;
 
@@ -307,7 +307,7 @@ def _cpp_calculator():
 
 
 def _java_calculator():
-    return textwrap.dedent('''\\
+    return textwrap.dedent('''\
         import java.util.Scanner;
 
         public class Main {
@@ -382,4 +382,4 @@ def generate_code(prompt):
     if language == "python":
         # Syntax-check generated Python before showing it to the user.
         ast.parse(code)
-    return f"{title}. Код ниже — локальная заготовка; я его не запускал.\\n\\n```{language}\\n{code}\\n```\\n\\nМогу доработать его под твои точные требования."
+    return f"{title}. Код ниже — локальная заготовка; я его не запускал.\n\n```{language}\n{code}\n```\n\nМогу доработать его под твои точные требования."
