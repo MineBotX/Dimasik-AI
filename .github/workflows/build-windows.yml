@@ -46,7 +46,7 @@ jobs:
         run: python train_brain.py
       - name: Build GUI executable
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all comtypes --collect-all win32com assistant/main.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name Dimasik --collect-all vosk --collect-all sounddevice --collect-all pyttsx3 --collect-all keyring --hidden-import keyring.backends.Windows --collect-all comtypes --collect-all win32com assistant/main.py
       - name: Prepare installer package
         shell: pwsh
         run: |
