@@ -1,6 +1,5 @@
 """Собственная экспериментальная языковая модель Димасика (word-level neural bigram)."""
 import json
-import math
 import random
 import re
 from pathlib import Path
