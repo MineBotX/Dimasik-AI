@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from assistant.image_generator import (
     LocalImageGenerator,
@@ -56,6 +58,25 @@ class ImageRequestTests(unittest.TestCase):
         self.assertTrue(all(char in "0123456789abcdef" for char in MODEL_SHA256))
         self.assertEqual(len(ENGINE_CPU_SHA256), 64)
         self.assertEqual(len(ENGINE_VULKAN_SHA256), 64)
+
+    def test_selects_vulkan_when_a_vulkan_device_is_listed(self):
+        generator = LocalImageGenerator(Path("."))
+        def find(backend):
+            return Path("vulkan/sd-cli.exe") if backend == "vulkan" else Path("cpu/sd-cli.exe")
+        with patch.object(generator, "_find_executable", side_effect=find):
+            with patch.object(generator, "_list_devices", return_value="Vulkan0\\tGPU"):
+                executable, backend = generator._select_runtime()
+        self.assertEqual(executable, Path("vulkan/sd-cli.exe"))
+        self.assertEqual(backend, "auto")
+
+    def test_selects_cpu_when_vulkan_is_unavailable(self):
+        generator = LocalImageGenerator(Path("."))
+        def find(backend):
+            return Path("cpu/sd-cli.exe") if backend == "cpu" else None
+        with patch.object(generator, "_find_executable", side_effect=find):
+            executable, backend = generator._select_runtime()
+        self.assertEqual(executable, Path("cpu/sd-cli.exe"))
+        self.assertEqual(backend, "cpu")
 
     def test_model_state_is_false_when_missing(self):
         from pathlib import Path
