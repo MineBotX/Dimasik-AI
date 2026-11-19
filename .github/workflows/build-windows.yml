@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - "assistant/**"
+      - "training_data.txt"
+      - "train_brain.py"
       - "requirements.txt"
       - "requirements-build.txt"
       - "update.ps1"
