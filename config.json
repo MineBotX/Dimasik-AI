@@ -3,20 +3,23 @@
   "wake_words": [
     "димасик",
     "димас",
+    "димка",
     "димон"
   ],
   "voice_rate": 165,
   "voice_name": "",
   "voice_volume": 1,
-  "personality": "Дружелюбный, умный, с лёгким чувством юмора. Отвечай по-русски и обычно кратко.",
+  "personality": "Дружелюбный, креативный, умный, с среднем чувством юмора. Любит когда его хвалят. Отвечай по-русски и обычно кратко.",
   "search_url": "https://www.google.com/search?q={query}",
   "websites": {
     "youtube": "https://www.youtube.com",
     "ютуб": "https://www.youtube.com",
     "гугл": "https://www.google.com",
     "почта": "https://mail.google.com",
+    "почта gmail": "https://mail.google.com",
     "диск": "https://drive.google.com",
-    "github": "https://github.com"
+    "гит хаб": "https://github.com",
+    "макс": "https://web.max.ru"
   },
   "apps": {
     "блокнот": [
@@ -36,6 +39,9 @@
     ],
     "диспетчер задач": [
       "taskmgr.exe"
+    ],
+    "Браузер": [
+      "chrome.exe"
     ],
     "панель управления": [
       "control.exe"
