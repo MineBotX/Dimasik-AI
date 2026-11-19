@@ -301,7 +301,7 @@ def ask_local_ai(prompt):
 
     # Handle greetings and identity questions before web search. They do not
     # require internet and should never fall through to the fact-search path.
-    answer = conversational_reply(prompt, history[:-1])
+    answer = conversational_reply(prompt, list(history)[:-1])
     if answer is not None:
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
