@@ -23,6 +23,7 @@ class SearchResultParser(HTMLParser):
         self.title_active = False
         self.title_depth = 0
         self.snippet_depth = 0
+        self.snippet_target = None
         self.capture = None
 
     def _begin_title(self, attrs):
@@ -55,7 +56,10 @@ class SearchResultParser(HTMLParser):
                 self.snippet_depth = 1
                 self.capture = "snippet"
                 if self.current is None:
-                    self.current = {"title": "", "url": "", "snippet": ""}
+                    if self.provider != "bing" and self.items:
+                        self.snippet_target = self.items[-1]
+                    else:
+                        self.current = {"title": "", "url": "", "snippet": ""}
         else:
             if tag == "a" and classes.intersection(self.TITLE_CLASSES):
                 self._begin_title(attr)
@@ -68,8 +72,10 @@ class SearchResultParser(HTMLParser):
     def handle_data(self, data):
         if self.title_active and self.current is not None:
             self.current["title"] += data
-        elif self.snippet_depth and self.current is not None:
-            self.current["snippet"] += data
+        elif self.snippet_depth:
+            target = self.snippet_target or self.current
+            if target is not None:
+                target["snippet"] += data
 
     def handle_endtag(self, tag):
         if self.title_active:
@@ -82,6 +88,7 @@ class SearchResultParser(HTMLParser):
             self.snippet_depth -= 1
             if self.snippet_depth <= 0:
                 self.snippet_depth = 0
+                self.snippet_target = None
                 self.capture = None
 
         if self.provider == "bing":
