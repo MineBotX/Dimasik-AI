@@ -55,18 +55,28 @@ jobs:
           Invoke-WebRequest "https://github.com/ggml-org/llama.cpp/releases/download/b12328/llama-b12328-bin-win-cpu-x64.zip" -OutFile $runtimeZip
           Expand-Archive -LiteralPath $runtimeZip -DestinationPath tools/llama -Force
           if (!(Get-ChildItem tools/llama -Filter llama-server.exe -Recurse)) { throw "llama-server.exe was not found in the CPU runtime archive" }
-      - name: Download stable-diffusion.cpp Vulkan runtime
+      - name: Download stable-diffusion.cpp CPU and Vulkan runtimes
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $ProgressPreference = "SilentlyContinue"
-          New-Item -ItemType Directory -Force tools/stable-diffusion | Out-Null
-          $runtimeZip = "$env:TEMP/stable-diffusion-vulkan.zip"
-          Invoke-WebRequest "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip" -OutFile $runtimeZip
-          $actualHash = (Get-FileHash -LiteralPath $runtimeZip -Algorithm SHA256).Hash.ToLower()
-          if ($actualHash -ne "3e66222c87ca27074e1fd8ce79706eef17a8aaf39949906aa1bee7e060f22ecc") { throw "stable-diffusion.cpp runtime SHA-256 mismatch" }
-          Expand-Archive -LiteralPath $runtimeZip -DestinationPath tools/stable-diffusion -Force
-          if (!(Get-ChildItem tools/stable-diffusion -Filter sd-cli.exe -Recurse)) { throw "sd-cli.exe was not found in the Vulkan runtime archive" }
+          New-Item -ItemType Directory -Force tools/stable-diffusion/cpu | Out-Null
+          New-Item -ItemType Directory -Force tools/stable-diffusion/vulkan | Out-Null
+
+          $cpuZip = "$env:TEMP/stable-diffusion-cpu.zip"
+          Invoke-WebRequest "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-cpu-x64.zip" -OutFile $cpuZip
+          $cpuHash = (Get-FileHash -LiteralPath $cpuZip -Algorithm SHA256).Hash.ToLower()
+          if ($cpuHash -ne "abef332cfca7861cc567910e79bedb70bfb2920bb4eedac97fcbb6db477f1596") { throw "stable-diffusion.cpp CPU runtime SHA-256 mismatch" }
+          Expand-Archive -LiteralPath $cpuZip -DestinationPath tools/stable-diffusion/cpu -Force
+
+          $vulkanZip = "$env:TEMP/stable-diffusion-vulkan.zip"
+          Invoke-WebRequest "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip" -OutFile $vulkanZip
+          $vulkanHash = (Get-FileHash -LiteralPath $vulkanZip -Algorithm SHA256).Hash.ToLower()
+          if ($vulkanHash -ne "3e66222c87ca27074e1fd8ce79706eef17a8aaf39949906aa1bee7e060f22ecc") { throw "stable-diffusion.cpp Vulkan runtime SHA-256 mismatch" }
+          Expand-Archive -LiteralPath $vulkanZip -DestinationPath tools/stable-diffusion/vulkan -Force
+
+          if (!(Get-ChildItem tools/stable-diffusion/cpu -Filter sd-cli.exe -Recurse)) { throw "CPU sd-cli.exe was not found" }
+          if (!(Get-ChildItem tools/stable-diffusion/vulkan -Filter sd-cli.exe -Recurse)) { throw "Vulkan sd-cli.exe was not found" }
       - name: Train Dimasik neural core
         run: python train_brain.py
       - name: Build GUI executable
