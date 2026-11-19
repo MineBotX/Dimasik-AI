@@ -12,7 +12,7 @@ def is_code_request(prompt):
     text = str(prompt or "").lower()
     return bool(re.search(
         r"\b(напиши|создай|сгенерируй|сделай|разработай|покажи)\b.{0,70}\b("
-        r"код|программ\w*|скрипт\w*|сайт\w*|калькулятор\w*|игр\w*|бот\w*|api)\b|"
+        r"код|программ\w*|скрипт\w*|сайт\w*|веб[- ]страниц\w*|калькулятор\w*|игр\w*|бот\w*|список задач|задачник|todo|api)\b|"
         r"\b(write|generate|create|build)\b.{0,70}\b(code|script|program|website|calculator|api)\b",
         text,
     )) or text.strip().startswith(("код на ", "программа на ", "сайт на "))
