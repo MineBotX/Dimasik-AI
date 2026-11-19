@@ -12,7 +12,7 @@ def is_code_request(prompt):
     text = str(prompt or "").lower()
     return bool(re.search(
         r"\b(напиши|создай|сгенерируй|сделай|разработай|покажи)\b.{0,70}\b("
-        r"код|программ|скрипт|сайт|калькулятор|игр|бот|api)\b|"
+        r"код|программ\w*|скрипт\w*|сайт\w*|калькулятор\w*|игр\w*|бот\w*|api)\b|"
         r"\b(write|generate|create|build)\b.{0,70}\b(code|script|program|website|calculator|api)\b",
         text,
     )) or text.strip().startswith(("код на ", "программа на ", "сайт на "))
@@ -23,7 +23,7 @@ def _language(text):
         return "html"
     if re.search(r"\b(язык\s*)?(javascript|js)\b", text):
         return "javascript"
-    if re.search(r"\b(c\\+\\+|cpp)\b", text):
+    if re.search(r"\b(c\+\+|cpp)\b", text):
         return "cpp"
     if re.search(r"\b(java)\b", text):
         return "java"
