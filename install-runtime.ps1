@@ -3,14 +3,22 @@ $PackageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppRoot = Join-Path $PackageRoot 'Dimasik'
 if (!(Test-Path (Join-Path $AppRoot 'Dimasik.exe'))) { $AppRoot = $PackageRoot }
 $Exe = Join-Path $AppRoot 'Dimasik.exe'
-if (!(Test-Path $Exe)) { Write-Host "Не найден Dimasik.exe. Распакуй архив полностью." -ForegroundColor Red; Read-Host "Enter"; exit 1 }
-if (!(Test-Path (Join-Path $AppRoot 'brain\dimasik_brain.npz'))) { Write-Host "Не найдены файлы собственного ядра Димасика. Скачай архив заново." -ForegroundColor Red; Read-Host "Enter"; exit 1 }
-$desktop = [Environment]::GetFolderPath('Desktop')
-$shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut((Join-Path $desktop 'Димасик.lnk'))
-$link.TargetPath = $Exe
-$link.WorkingDirectory = $AppRoot
-$link.Save()
-Write-Host "Готово! Димасик установлен. Qwen и Ollama не используются." -ForegroundColor Green
+if (!(Test-Path $Exe)) {
+    Write-Host 'Dimasik.exe was not found. Extract the entire archive first.' -ForegroundColor Red
+    Read-Host 'Press Enter to close'
+    exit 1
+}
+if (!(Test-Path (Join-Path $AppRoot 'brain\dimasik_brain.npz'))) {
+    Write-Host 'The Dimasik brain files are missing. Download and extract the archive again.' -ForegroundColor Red
+    Read-Host 'Press Enter to close'
+    exit 1
+}
+$Desktop = [Environment]::GetFolderPath('Desktop')
+$Shell = New-Object -ComObject WScript.Shell
+$Shortcut = $Shell.CreateShortcut((Join-Path $Desktop 'Dimasik.lnk'))
+$Shortcut.TargetPath = $Exe
+$Shortcut.WorkingDirectory = $AppRoot
+$Shortcut.Save()
+Write-Host 'Installation complete. Starting Dimasik...' -ForegroundColor Green
 Start-Process -FilePath $Exe -WorkingDirectory $AppRoot
-Read-Host "Нажми Enter для закрытия"
+Read-Host 'Press Enter to close'
