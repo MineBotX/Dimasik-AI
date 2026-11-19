@@ -21,7 +21,7 @@ VOCAB_PATH = ROOT / "brain" / "vocab.json"
 UNK = "<unk>"
 BOS = "<bos>"
 EOS = "<eos>"
-CONTEXT_SIZE = 8
+CONTEXT_SIZE = 12
 
 
 def tokenize(text):
@@ -99,7 +99,7 @@ class DimasikBrain:
         return result[:1].upper() + result[1:]
 
 
-def train(data_path=None, epochs=45, embedding_size=32, hidden_size=128, learning_rate=0.003):
+def train(data_path=None, epochs=60, embedding_size=48, hidden_size=192, learning_rate=0.002):
     """Обучает модель предсказывать следующий токен по окну из 8 токенов."""
     data_path = Path(data_path or ROOT / "training_data.txt")
     lines = [line.strip() for line in data_path.read_text(encoding="utf-8").splitlines() if line.strip()]
