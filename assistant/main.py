@@ -27,6 +27,7 @@ from code_writer import is_code_request
 from local_coder import LocalCoder
 from dialogue import conversational_reply
 from modern_widgets import RoundedButton, RoundedPanel
+from image_generator import LocalImageGenerator, is_image_request
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -89,6 +90,7 @@ ASSISTANT_NAME = str(CONFIG.get("assistant_name", "Димасик"))
 BRAIN = DimasikBrain()
 KNOWLEDGE = LocalKnowledge(ROOT / "brain" / "knowledge.sqlite3")
 CODE_WRITER = LocalCoder(ROOT)
+IMAGE_GENERATOR = LocalImageGenerator(ROOT)
 WAKE_WORDS = tuple(CONFIG["wake_words"])
 tts = pyttsx3.init()
 tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
@@ -224,6 +226,24 @@ def ask_local_ai(prompt):
             answer = CODE_WRITER.generate(normalized, conversation=list(history)[:-1])
         except Exception as exc:
             answer = "Не получилось запустить локальную модель для написания кода: " + str(exc)
+        history.append({"role": "assistant", "content": answer})
+        KNOWLEDGE.remember(prompt, answer, source="conversation")
+        return answer
+
+    # Generate images completely offline after the local model is installed.
+    if is_image_request(normalized):
+        try:
+            if UI_APP is not None:
+                UI_APP.set_status("Создаю изображение локально…", "#82aaff")
+            image_path = IMAGE_GENERATOR.generate(normalized)
+            answer = "Готово! Я создал изображение и сохранил его сюда:\n" + str(image_path)
+            if UI_APP is not None:
+                UI_APP.set_status("Изображение готово", "#65dfb5")
+                UI_APP.post_image_preview(str(image_path))
+        except Exception as exc:
+            answer = "Не получилось создать изображение: " + str(exc)
+            if UI_APP is not None:
+                UI_APP.set_status("Не удалось создать изображение", "#ff8585")
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
@@ -446,6 +466,7 @@ class DimasikApp:
         self.email_account = CONFIG.get("email_account", {})
         self.worker = None
         self.model = None
+        self._image_previews = []
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(250, self.initialize)
@@ -584,6 +605,15 @@ class DimasikApp:
             **{k: v for k, v in common_button.items() if k != "fg"},
         )
         self.coder_btn.pack(side="left", padx=5)
+        self.image_btn = RoundedButton(
+            actions,
+            text="🖼 Создать картинку" if IMAGE_GENERATOR.model_installed
+                 else "🖼 Модель картинок",
+            command=self.image_action,
+            fg=self.GREEN if IMAGE_GENERATOR.model_installed else self.ACCENT,
+            **{k: v for k, v in common_button.items() if k != "fg"},
+        )
+        self.image_btn.pack(side="left", padx=5)
         RoundedButton(
             actions, text="Очистить чат", command=self.clear_chat,
             bg="#202b42", fg=self.MUTED, activebackground="#34445f",
@@ -624,6 +654,109 @@ class DimasikApp:
             text="Локальный помощник  •  Vosk  •  DimaCore  •  Granite",
             bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
         ).pack()
+
+    def image_action(self):
+        if not IMAGE_GENERATOR.model_installed:
+            self.download_image_model()
+            return
+        prompt = simpledialog.askstring(
+            "Создать изображение",
+            "Опиши, что нужно нарисовать:",
+            parent=self.root,
+        )
+        if prompt and prompt.strip():
+            self.entry.delete(0, "end")
+            self.entry.insert(0, "Нарисуй " + prompt.strip())
+            self.send_text()
+
+    def download_image_model(self):
+        if IMAGE_GENERATOR.model_installed:
+            messagebox.showinfo("Модель изображений", "Модель Stable Diffusion уже установлена.")
+            return
+        if not messagebox.askyesno(
+            "Скачать локальную модель изображений",
+            "Будет скачана Stable Diffusion 1.5 Q4_0 размером около 1,75 ГБ. "
+            "Для проверки файла и генерации нужно около 3 ГБ свободного места. "
+            "Желательно иметь 8 ГБ оперативной памяти или больше. "
+            "После загрузки изображения создаются только на этом компьютере, без облака и оплаты. "
+            "Продолжить?",
+        ):
+            return
+        self.image_btn.configure(state="disabled", text="Загрузка модели: 0%")
+        threading.Thread(target=self._download_image_worker, daemon=True).start()
+
+    def _download_image_worker(self):
+        error = None
+
+        def progress(percent, downloaded, total):
+            label = f"Загрузка картинок: {percent}% ({downloaded / 1_000_000_000:.2f} / {total / 1_000_000_000:.2f} ГБ)"
+            self.root.after(0, lambda value=label: self.image_btn.configure(text=value))
+
+        try:
+            IMAGE_GENERATOR.download_model(progress=progress)
+        except Exception as exc:
+            error = str(exc)
+
+        def finish():
+            if error:
+                self.image_btn.configure(
+                    state="normal", text="↻ Повторить загрузку", fg=self.ACCENT
+                )
+                messagebox.showerror("Модель изображений", error)
+            else:
+                self.image_btn.configure(
+                    state="normal", text="🖼 Создать картинку", fg=self.GREEN
+                )
+                messagebox.showinfo(
+                    "Модель изображений",
+                    "Stable Diffusion установлена и проверена. Теперь можно создавать картинки без интернета.",
+                )
+        self.root.after(0, finish)
+
+    def post_image_preview(self, image_path):
+        self.root.after(0, lambda path=image_path: self._insert_image_preview(path))
+
+    def _insert_image_preview(self, image_path):
+        try:
+            preview = tk.PhotoImage(file=image_path)
+            shrink = max(1, (max(preview.width(), preview.height()) + 319) // 320)
+            if shrink > 1:
+                preview = preview.subsample(shrink, shrink)
+            self._image_previews.append(preview)
+            preview_button = tk.Button(
+                self.chat,
+                image=preview,
+                command=lambda path=image_path: self._open_generated_image(path),
+                bg=self.PANEL,
+                activebackground=self.PANEL,
+                relief="flat",
+                bd=0,
+                cursor="hand2",
+            )
+            self.chat.configure(state="normal")
+            self.chat.insert("end", "\n")
+            self.chat.window_create("end", window=preview_button, padx=8, pady=5)
+            self.chat.insert(
+                "end",
+                "\nНажми на изображение, чтобы открыть оригинал.\nФайл: " + image_path + "\n",
+                "body",
+            )
+            self.chat.configure(state="disabled")
+            self.chat.see("end")
+        except Exception as exc:
+            self._append(
+                "СИСТЕМА",
+                "Не удалось показать предпросмотр. Файл сохранён: "
+                + image_path + "\n" + str(exc),
+                "system",
+            )
+
+    @staticmethod
+    def _open_generated_image(image_path):
+        try:
+            os.startfile(image_path)
+        except (AttributeError, OSError):
+            webbrowser.open(Path(image_path).resolve().as_uri())
 
     def download_coder_model(self):
         if CODE_WRITER.model_installed:
