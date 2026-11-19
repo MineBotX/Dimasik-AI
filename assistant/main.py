@@ -92,6 +92,12 @@ def mood_for_text(text):
     value = str(text).lower()
     if any(x in value for x in ("ошибка", "не удалось", "не получилось", "недоступ")):
         return ("😟", "Есть затруднение", "#ff8585")
+    if any(x in value for x in ("грустно", "жаль", "одиноко", "расстроен", "нелегко")):
+        return ("😢", "Сочувствую", "#8fa8ff")
+    if any(x in value for x in ("удивительно", "неожиданно", "ого", "ничего себе")):
+        return ("😮", "Удивлён", "#d7a0ff")
+    if any(x in value for x in ("злюсь", "раздражает", "сердит")):
+        return ("😠", "Серьёзно настроен", "#ff9b72")
     if any(x in value for x in ("готово", "отлично", "супер", "успеш", "открываю")):
         return ("😄", "Рад помочь!", "#65e6ad")
     if any(x in value for x in ("не знаю", "уточни", "что именно", "повтори")):
@@ -147,7 +153,7 @@ def speak(message):
         # Change speaking tempo with the detected emotion.
         emotion, _label, _color = mood_for_text(message)
         base_rate = max(100, min(250, int(CONFIG.get("voice_rate", 165))))
-        rate_shift = {"😄": 22, "😊": 14, "🤔": 8, "😟": -18, "😢": -24, "😮": 18}.get(emotion, 0)
+        rate_shift = {"😄": 22, "😊": 14, "🤔": 8, "😟": -18, "😢": -24, "😮": 18, "😠": -8}.get(emotion, 0)
         tts.setProperty("rate", max(100, min(250, base_rate + rate_shift)))
         tts.setProperty("volume", max(0.0, min(1.0, float(CONFIG.get("voice_volume", 1.0)))))
         tts.say(message)
