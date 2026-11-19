@@ -42,11 +42,11 @@ RELEASE_API = "https://api.github.com/repos/MineBotX/Dimasik-AI/releases/tags/la
 
 DEFAULTS = {
     "assistant_name": "Димасик",
-    "wake_words": ["димасик", "димас", "димон"],
+    "wake_words": ["димасик", "димас", "димка", "димон"],
     "voice_rate": 165,
     "voice_name": "",
     "voice_volume": 1.0,
-    "personality": "Дружелюбный, умный, с лёгким чувством юмора. Отвечай по-русски и обычно кратко.",
+    "personality": "Дружелюбный, креативный, умный, с среднем чувством юмора. Любит когда его хвалят. Отвечай по-русски и обычно кратко.",
     "search_url": "https://www.google.com/search?q={query}",
     "websites": {
         "youtube": "https://www.youtube.com",
@@ -55,7 +55,8 @@ DEFAULTS = {
         "почта": "https://mail.google.com",
         "почта gmail": "https://mail.google.com",
         "диск": "https://drive.google.com",
-        "github": "https://github.com"
+        "гит хаб": "https://github.com",
+        "макс": "https://web.max.ru"
     },
     "apps": {
         "блокнот": ["notepad.exe"],
@@ -64,6 +65,7 @@ DEFAULTS = {
         "paint": ["mspaint.exe"],
         "паинт": ["mspaint.exe"],
         "диспетчер задач": ["taskmgr.exe"],
+        "браузер": ["chrome.exe"],
         "панель управления": ["control.exe"],
         "wordpad": ["write.exe"]
     }
@@ -82,8 +84,12 @@ def load_config():
     else:
         CONFIG_PATH.write_text(json.dumps(DEFAULTS, ensure_ascii=False, indent=2), encoding="utf-8")
     config["wake_words"] = [str(x).lower() for x in config.get("wake_words", DEFAULTS["wake_words"])]
-    config["apps"] = config.get("apps") if isinstance(config.get("apps"), dict) else {}
-    config["websites"] = config.get("websites") if isinstance(config.get("websites"), dict) else {}
+    apps = config.get("apps") if isinstance(config.get("apps"), dict) else {}
+    websites = config.get("websites") if isinstance(config.get("websites"), dict) else {}
+    # Голосовая команда перед сравнением приводится к нижнему регистру,
+    # поэтому регистр ключей в пользовательском config.json не должен иметь значения.
+    config["apps"] = {str(key).strip().lower(): value for key, value in apps.items()}
+    config["websites"] = {str(key).strip().lower(): value for key, value in websites.items()}
     return config
 
 
@@ -294,6 +300,7 @@ def ask_local_ai(prompt):
                         + source_text,
                         conversation=list(history)[:-1],
                         max_tokens=1800,
+                        personality=str(CONFIG.get("personality", "")),
                     )
                 except Exception as exc:
                     answer = source_text + "\n\nНе удалось запустить локальное обобщение Granite: " + str(exc)
@@ -308,6 +315,7 @@ def ask_local_ai(prompt):
                         "предупреди, что сведения не были проверены в интернете. Вопрос: " + query,
                         conversation=list(history)[:-1],
                         max_tokens=1600,
+                        personality=str(CONFIG.get("personality", "")),
                     )
                 except Exception as exc:
                     answer = "Не удалось получить результаты поиска или запустить локальную модель: " + str(exc)
@@ -334,7 +342,11 @@ def ask_local_ai(prompt):
 
     if CODE_WRITER.model_installed:
         try:
-            answer = CODE_WRITER.generate_chat(normalized, conversation=list(history)[:-1])
+            answer = CODE_WRITER.generate_chat(
+                normalized,
+                conversation=list(history)[:-1],
+                personality=str(CONFIG.get("personality", "")),
+            )
         except Exception as exc:
             answer = "Не удалось запустить локальную модель Granite: " + str(exc)
     else:
