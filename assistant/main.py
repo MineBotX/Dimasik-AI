@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox, simpledialog, filedialog
+from tkinter import messagebox, simpledialog, filedialog, filedialog
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -517,6 +517,7 @@ class DimasikApp:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(250, self.initialize)
         self.root.after(1800, lambda: self.check_updates(silent=True))
+        self.root.after(6000, self.check_reminders)
 
     def _build(self):
         # Header card
@@ -644,8 +645,8 @@ class DimasikApp:
         ).pack(side="left", padx=5)
         self.coder_btn = RoundedButton(
             actions,
-            text="✓  Кодовая модель установлена" if CODE_WRITER.model_installed
-                  else "↓  Скачать модель кода (≈2,24 ГБ)",
+            text="✓  Модель ИИ установлена" if CODE_WRITER.model_installed
+                  else "↓  Модель ИИ (≈2,24 ГБ)",
             command=self.download_coder_model,
             fg=self.GREEN if CODE_WRITER.model_installed else self.ACCENT,
             **{k: v for k, v in common_button.items() if k != "fg"},
@@ -660,6 +661,14 @@ class DimasikApp:
             **{k: v for k, v in common_button.items() if k != "fg"},
         )
         self.image_btn.pack(side="left", padx=5)
+        RoundedButton(
+            actions, text="📎  Файл", command=self.attach_file,
+            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
+        ).pack(side="left", padx=5)
+        RoundedButton(
+            actions, text="🗒  Мои дела", command=self.show_productivity,
+            **common_button,
+        ).pack(side="left", padx=5)
         RoundedButton(
             actions, text="Очистить чат", command=self.clear_chat,
             bg="#202b42", fg=self.MUTED, activebackground="#34445f",
@@ -950,10 +959,7 @@ class DimasikApp:
         if not text:
             return
         self.entry.delete(0, "end")
-        self._append("ТЫ", text, "user")
-        self.set_mood(("🤔", "Обдумываю ответ", "#ffd27a"))
-        self.send_btn.configure(state="disabled")
-        threading.Thread(target=self._answer_text, args=(text,), daemon=True).start()
+        self._submit_prompt(text)
 
     def _answer_text(self, text):
         try:
