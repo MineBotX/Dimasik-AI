@@ -26,6 +26,7 @@ from crosshair_api import start_server as start_crosshair_api
 from code_writer import is_code_request
 from local_coder import LocalCoder
 from dialogue import conversational_reply
+from modern_widgets import RoundedButton, RoundedPanel
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -424,19 +425,20 @@ def execute_command(command):
 
 
 class DimasikApp:
-    BG = "#0b1020"
-    PANEL = "#121a2d"
-    PANEL2 = "#1a2540"
-    ACCENT = "#55c7ff"
-    TEXT = "#edf4ff"
-    MUTED = "#91a3bd"
-    GREEN = "#5ee0a0"
+    BG = "#0a1020"
+    PANEL = "#121c30"
+    PANEL2 = "#1a2942"
+    ACCENT = "#82aaff"
+    TEXT = "#f1f5ff"
+    MUTED = "#93a5bf"
+    GREEN = "#65dfb5"
+    BORDER = "#273956"
 
     def __init__(self, root):
         self.root = root
         self.root.title(ASSISTANT_NAME + " — локальный ИИ")
-        self.root.geometry("1000x700")
-        self.root.minsize(720, 540)
+        self.root.geometry("1180x780")
+        self.root.minsize(840, 640)
         self.root.configure(bg=self.BG)
         self.running = threading.Event()
         self.github = GitHubManager()
@@ -450,92 +452,174 @@ class DimasikApp:
         self.root.after(1800, lambda: self.check_updates(silent=True))
 
     def _build(self):
-        header = tk.Frame(self.root, bg=self.PANEL, padx=16, pady=10)
-        header.pack(fill="x")
-        left = tk.Frame(header, bg=self.PANEL)
-        left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text="◈  " + ASSISTANT_NAME, bg=self.PANEL, fg=self.TEXT,
-                 font=("Segoe UI", 20, "bold")).pack(anchor="w")
-        tk.Label(left, text="ЛОКАЛЬНЫЙ ГОЛОСОВОЙ ПОМОЩНИК", bg=self.PANEL,
-                 fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(2, 0))
-        right = tk.Frame(header, bg=self.PANEL)
-        right.pack(side="right")
-        self.mic_btn = tk.Button(right, text="▶  ВКЛЮЧИТЬ МИКРОФОН", command=self.toggle_listening,
-                                 bg=self.GREEN, fg="#06111e", activebackground="#83efb9",
-                                 relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=10,
-                                 cursor="hand2")
+        # Header card
+        header = RoundedPanel(
+            self.root, fill=self.PANEL, background=self.BG, radius=20,
+            padding=12, border=self.BORDER, height=100,
+        )
+        header.pack(fill="x", padx=16, pady=(14, 6))
+        header_content = header.content
+        left = tk.Frame(header_content, bg=self.PANEL)
+        left.pack(side="left", fill="both", expand=True)
+        tk.Label(
+            left, text="◈  " + ASSISTANT_NAME, bg=self.PANEL, fg=self.TEXT,
+            font=("Segoe UI", 21, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            left, text="ЛОКАЛЬНЫЙ ГОЛОСОВОЙ ПОМОЩНИК", bg=self.PANEL,
+            fg=self.MUTED, font=("Segoe UI", 8, "bold"),
+        ).pack(anchor="w", pady=(2, 0))
+
+        right = tk.Frame(header_content, bg=self.PANEL)
+        right.pack(side="right", anchor="e")
+        self.mic_btn = RoundedButton(
+            right, text="🎙  ВКЛЮЧИТЬ МИКРОФОН", command=self.toggle_listening,
+            bg=self.GREEN, fg="#071522", activebackground="#83ecc8",
+            font=("Segoe UI", 10, "bold"), padx=17, pady=10, radius=14,
+            border="#73e8c1", canvas_bg=self.PANEL,
+        )
         self.mic_btn.pack(anchor="e", pady=(0, 5))
-        self.status = tk.Label(right, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
-                               font=("Segoe UI", 9, "bold"))
+        self.status = tk.Label(
+            right, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
+            font=("Segoe UI", 9, "bold"),
+        )
         self.status.pack(anchor="e")
-        self.mood_label = tk.Label(right, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT,
-                                   font=("Segoe UI", 9, "bold"))
+        self.mood_label = tk.Label(
+            right, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT,
+            font=("Segoe UI", 9, "bold"),
+        )
         self.mood_label.pack(anchor="e", pady=(3, 0))
 
-        body = tk.Frame(self.root, bg=self.BG, padx=14, pady=10)
+        body = tk.Frame(self.root, bg=self.BG, padx=16, pady=8)
         body.pack(fill="both", expand=True)
-        hero = tk.Frame(body, bg=self.PANEL, padx=12, pady=7)
-        hero.pack(fill="x", pady=(0, 8))
-        self.avatar = tk.Label(hero, text="🙂", bg=self.PANEL, fg=self.ACCENT,
-                               font=("Segoe UI Emoji", 25))
-        self.avatar.pack(side="left", padx=(0, 10))
-        tk.Label(hero, text="Твой помощник всегда рядом", bg=self.PANEL, fg=self.TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side="left")
 
+        # Rounded assistant identity card
+        hero = RoundedPanel(
+            body, fill=self.PANEL, background=self.BG, radius=18,
+            padding=9, border=self.BORDER, height=76,
+        )
+        hero.pack(fill="x", pady=(0, 10))
+        self.avatar = tk.Label(
+            hero.content, text="🤖", bg=self.PANEL, fg=self.ACCENT,
+            font=("Segoe UI Emoji", 25),
+        )
+        self.avatar.pack(side="left", padx=(5, 12))
+        hero_text = tk.Frame(hero.content, bg=self.PANEL)
+        hero_text.pack(side="left", fill="y", pady=3)
+        tk.Label(
+            hero_text, text="Твой помощник всегда рядом", bg=self.PANEL,
+            fg=self.TEXT, font=("Segoe UI", 11, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            hero_text, text="Общайся, ищи информацию и создавай программы",
+            bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8),
+        ).pack(anchor="w", pady=(3, 0))
+
+        # Bottom composer and action bar
         bottom = tk.Frame(body, bg=self.BG)
-        bottom.pack(side="bottom", fill="x", pady=(8, 0))
-        controls = tk.Frame(bottom, bg=self.BG)
-        controls.pack(fill="x", pady=(0, 7))
-        self.entry = tk.Entry(controls, bg=self.PANEL2, fg=self.TEXT, insertbackground=self.TEXT,
-                              relief="flat", font=("Segoe UI", 11), highlightthickness=1,
-                              highlightbackground="#263653", highlightcolor=self.ACCENT)
-        self.entry.pack(side="left", fill="x", expand=True, ipady=10, padx=(0, 8))
+        bottom.pack(side="bottom", fill="x", pady=(10, 0))
+        footer = RoundedPanel(
+            bottom, fill=self.PANEL, background=self.BG, radius=18,
+            padding=10, border=self.BORDER, height=124,
+        )
+        footer.pack(fill="x")
+        controls = tk.Frame(footer.content, bg=self.PANEL)
+        controls.pack(fill="x", pady=(0, 8))
+        self.entry = tk.Entry(
+            controls, bg=self.PANEL2, fg=self.TEXT, insertbackground=self.TEXT,
+            relief="flat", bd=0, font=("Segoe UI", 11),
+            highlightthickness=1, highlightbackground=self.BORDER,
+            highlightcolor=self.ACCENT,
+        )
+        self.entry.pack(side="left", fill="x", expand=True, ipady=11, padx=(2, 9))
         self.entry.bind("<Return>", lambda event: self.send_text())
-        self.send_btn = tk.Button(controls, text="Отправить", command=self.send_text,
-                                  bg=self.ACCENT, fg="#06111e", activebackground="#83d9ff",
-                                  relief="flat", font=("Segoe UI", 9, "bold"), padx=14, pady=9,
-                                  cursor="hand2")
+        self.send_btn = RoundedButton(
+            controls, text="Отправить  ➤", command=self.send_text,
+            bg=self.ACCENT, fg="#0b1425", activebackground="#a2c0ff",
+            font=("Segoe UI", 9, "bold"), padx=17, pady=10, radius=12,
+            border="#93b4ff", canvas_bg=self.PANEL,
+        )
         self.send_btn.pack(side="left")
 
-        actions = tk.Frame(bottom, bg=self.BG)
+        actions = tk.Frame(footer.content, bg=self.PANEL)
         actions.pack(fill="x")
-        tk.Button(actions, text="⚙ Настройки", command=self.open_settings,
-                  bg=self.PANEL2, fg=self.TEXT, activebackground="#263653", relief="flat",
-                  font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2").pack(side="left", padx=(0, 5))
-        self.update_btn = tk.Button(actions, text="↻ Обновления", command=self.check_updates,
-                                    bg=self.PANEL2, fg=self.ACCENT, relief="flat",
-                                    font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2")
+        common_button = {
+            "bg": self.PANEL2,
+            "fg": self.TEXT,
+            "activebackground": "#2a3d5e",
+            "font": ("Segoe UI", 9, "bold"),
+            "padx": 12,
+            "pady": 8,
+            "radius": 11,
+            "border": self.BORDER,
+            "canvas_bg": self.PANEL,
+        }
+        RoundedButton(
+            actions, text="⚙  Настройки", command=self.open_settings,
+            **common_button,
+        ).pack(side="left", padx=(0, 5))
+        self.update_btn = RoundedButton(
+            actions, text="↻  Обновления", command=self.check_updates,
+            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
+        )
         self.update_btn.pack(side="left", padx=5)
-        tk.Button(actions, text="⌘ GitHub", command=self.open_github, bg=self.PANEL2, fg=self.TEXT,
-                  relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
-        tk.Button(actions, text="✉ Почта", command=self.open_email, bg=self.PANEL2, fg=self.TEXT,
-                  relief="flat", padx=10, pady=7, cursor="hand2").pack(side="left", padx=5)
-        self.coder_btn = tk.Button(
+        RoundedButton(
+            actions, text="⌘  GitHub", command=self.open_github,
+            **common_button,
+        ).pack(side="left", padx=5)
+        RoundedButton(
+            actions, text="✉  Почта", command=self.open_email,
+            **common_button,
+        ).pack(side="left", padx=5)
+        self.coder_btn = RoundedButton(
             actions,
-            text="Кодовая модель установлена" if CODE_WRITER.model_installed else "Скачать модель кода (≈2,24 ГБ)",
+            text="✓  Кодовая модель установлена" if CODE_WRITER.model_installed
+                  else "↓  Скачать модель кода (≈2,24 ГБ)",
             command=self.download_coder_model,
-            bg=self.PANEL2, fg=self.GREEN if CODE_WRITER.model_installed else self.ACCENT,
-            relief="flat", padx=10, pady=7, cursor="hand2",
+            fg=self.GREEN if CODE_WRITER.model_installed else self.ACCENT,
+            **{k: v for k, v in common_button.items() if k != "fg"},
         )
         self.coder_btn.pack(side="left", padx=5)
-        tk.Button(actions, text="Очистить чат", command=self.clear_chat,
-                  bg=self.PANEL2, fg=self.MUTED, activebackground="#263653", relief="flat",
-                  font=("Segoe UI", 9), padx=10, pady=7, cursor="hand2").pack(side="right")
+        RoundedButton(
+            actions, text="Очистить чат", command=self.clear_chat,
+            bg="#202b42", fg=self.MUTED, activebackground="#34445f",
+            font=("Segoe UI", 9), padx=12, pady=8, radius=11,
+            border=self.BORDER, canvas_bg=self.PANEL,
+        ).pack(side="right")
 
-        self.chat = tk.Text(body, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
-                            relief="flat", wrap="word", padx=14, pady=12,
-                            font=("Segoe UI", 10), state="disabled", spacing1=4, spacing3=7)
+        # Chat lives inside a rounded card; text remains selectable/copyable.
+        chat_card = RoundedPanel(
+            body, fill=self.PANEL, background=self.BG, radius=20,
+            padding=8, border=self.BORDER, height=420,
+        )
+        chat_card.pack(fill="both", expand=True)
+        self.chat = tk.Text(
+            chat_card.content, bg=self.PANEL, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", bd=0,
+            wrap="word", padx=14, pady=12, font=("Segoe UI", 10),
+            state="disabled", spacing1=5, spacing3=8,
+            selectbackground="#34527a", selectforeground="#ffffff",
+        )
         self.chat.pack(fill="both", expand=True)
         self.chat.tag_configure("system", foreground=self.MUTED, font=("Segoe UI", 8))
         self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 9, "bold"))
-        self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=7, lmargin2=7)
-        self.chat.tag_configure("code", foreground="#a8f0ce", background="#080e1b",
-                                font=("Consolas", 9), lmargin1=16, lmargin2=16,
-                                spacing1=3, spacing3=3)
-        self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
-        tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции отдельно",
-                 bg=self.BG, fg="#667995", font=("Segoe UI", 7), pady=4).pack()
+        self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=8, lmargin2=8)
+        self.chat.tag_configure(
+            "code", foreground="#b7f3d8", background="#0c1423",
+            font=("Cascadia Code", 9), lmargin1=18, lmargin2=18,
+            spacing1=5, spacing3=5,
+        )
+        self._append(
+            "СИСТЕМА",
+            "Привет! Я Димасик. Напиши сообщение или включи микрофон.",
+            "system",
+        )
+        tk.Label(
+            self.root,
+            text="Локальный помощник  •  Vosk  •  DimaCore  •  Granite",
+            bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
+        ).pack()
 
     def download_coder_model(self):
         if CODE_WRITER.model_installed:
