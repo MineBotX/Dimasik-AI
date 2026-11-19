@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -19,6 +19,8 @@ import requests
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model
 from brain import DimasikBrain
+from github_manager import GitHubManager
+from email_manager import EmailManager
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -334,10 +336,13 @@ class DimasikApp:
     def __init__(self, root):
         self.root = root
         self.root.title(ASSISTANT_NAME + " — локальный ИИ")
-        self.root.geometry("920x680")
-        self.root.minsize(720, 540)
+        self.root.geometry("1080x760")
+        self.root.minsize(820, 620)
         self.root.configure(bg=self.BG)
         self.running = threading.Event()
+        self.github = GitHubManager()
+        self.email = EmailManager()
+        self.email_account = CONFIG.get("email_account", {})
         self.worker = None
         self.model = None
         self._build()
@@ -399,10 +404,12 @@ class DimasikApp:
                   font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="left", padx=8)
         self.update_btn = tk.Button(bottom, text="↻  Проверить обновления", command=self.check_updates, bg=self.PANEL2, fg=self.ACCENT, relief="flat", padx=10, pady=10)
         self.update_btn.pack(side="left", padx=8)
+        tk.Button(bottom, text="⌘  GitHub", command=self.open_github, bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=10, cursor="hand2").pack(side="left", padx=5)
+        tk.Button(bottom, text="✉  Почта", command=self.open_email, bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=10, cursor="hand2").pack(side="left", padx=5)
         tk.Button(bottom, text="Очистить чат", command=self.clear_chat,
                   bg=self.PANEL2, fg=self.MUTED, activebackground="#263653", relief="flat",
                   font=("Segoe UI", 10), padx=14, pady=10, cursor="hand2").pack(side="right")
-        tk.Label(self.root, text="Работает локально • Vosk + Ollama • Настройки хранятся на этом компьютере",
+        tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции подключаются отдельно",
                  bg=self.BG, fg="#667995", font=("Segoe UI", 8), pady=8).pack()
 
     def set_mood(self, mood):
@@ -510,6 +517,22 @@ class DimasikApp:
         if self.model is None:
             messagebox.showwarning("Димасик", "Модель распознавания речи не загружена. Проверь папку models.")
             return
+        try:
+            device = sd.query_devices(kind="input")
+            if not device or int(device.get("max_input_channels", 0)) < 1:
+                raise RuntimeError("Windows не обнаружила устройство записи.")
+            with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=4000, dtype="int16",
+                                   channels=1, callback=audio_callback):
+                pass
+        except Exception as exc:
+            devices = sd.query_devices()
+            inputs = [f"{i}: {d['name']} (каналов: {d['max_input_channels']})"
+                      for i, d in enumerate(devices) if d.get("max_input_channels", 0) > 0]
+            details = "\n".join(inputs) or "Входные устройства не найдены."
+            messagebox.showerror("Не удалось включить микрофон",
+                f"{exc}\n\nПроверь разрешение Windows для микрофона и выбери устройство записи по умолчанию.\n\nНайденные устройства:\n{details}")
+            self.set_status("Микрофон недоступен", "#ff7777")
+            return
         self.running.set()
         self.mic_btn.configure(text="■  Выключить микрофон")
         self.set_status("Слушаю ключевое слово «" + ASSISTANT_NAME + "»")
@@ -538,10 +561,121 @@ class DimasikApp:
                         break
                 self.set_status("Слушаю ключевое слово «" + ASSISTANT_NAME + "»")
             except Exception as exc:
+                self.running.clear()
                 self.set_status("Ошибка микрофона", "#ff7777")
-                self.root.after(0, lambda e=str(exc): self._append("ОШИБКА", e, "system"))
-                time.sleep(1)
+                self.root.after(0, lambda e=str(exc): messagebox.showerror(
+                    "Ошибка микрофона", f"Не удалось продолжить запись: {e}\n\nПроверь разрешения Windows: Параметры → Конфиденциальность и безопасность → Микрофон."))
+                break
         self.root.after(0, lambda: self.mic_btn.configure(text="▶  Включить микрофон"))
+
+
+    def open_github(self):
+        win = tk.Toplevel(self.root)
+        win.title("GitHub — проекты")
+        win.geometry("700x520")
+        win.configure(bg=self.BG)
+        tk.Label(win, text="Управление GitHub", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 18, "bold")).pack(anchor="w", padx=20, pady=(18, 4))
+        tk.Label(win, text="Токен хранится в защищённом хранилище Windows.",
+                 bg=self.BG, fg=self.MUTED).pack(anchor="w", padx=20)
+        bar = tk.Frame(win, bg=self.BG)
+        bar.pack(fill="x", padx=20, pady=14)
+        state = tk.Label(bar, text="Подключён" if self.github.connected else "Не подключён",
+                         bg=self.BG, fg=self.GREEN if self.github.connected else "#ffbb66")
+        state.pack(side="left")
+        listing = tk.Listbox(win, bg=self.PANEL, fg=self.TEXT, relief="flat",
+                             font=("Segoe UI", 10), selectbackground=self.ACCENT)
+        listing.pack(fill="both", expand=True, padx=20, pady=(0, 14))
+        def connect():
+            token = simpledialog.askstring("GitHub", "Вставь GitHub token с минимальными нужными правами:", show="*", parent=win)
+            if not token:
+                return
+            try:
+                user = self.github.connect(token)
+                state.configure(text="Подключён: " + user.get("login", ""), fg=self.GREEN)
+                load_repos()
+            except Exception as exc:
+                messagebox.showerror("GitHub", str(exc), parent=win)
+        def load_repos():
+            listing.delete(0, "end")
+            try:
+                repos = self.github.list_repositories()
+                for repo in repos:
+                    listing.insert("end", f"{repo['full_name']}  •  {repo.get('description') or 'Без описания'}")
+                if not repos:
+                    listing.insert("end", "Репозитории не найдены.")
+            except Exception as exc:
+                messagebox.showerror("GitHub", str(exc), parent=win)
+        def disconnect():
+            try:
+                self.github.disconnect()
+                state.configure(text="Не подключён", fg="#ffbb66")
+                listing.delete(0, "end")
+            except Exception as exc:
+                messagebox.showerror("GitHub", str(exc), parent=win)
+        tk.Button(bar, text="Подключить", command=connect, bg=self.ACCENT, fg="#06111e",
+                  relief="flat", padx=12, pady=7).pack(side="left", padx=8)
+        tk.Button(bar, text="Обновить список", command=load_repos, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=12, pady=7).pack(side="left")
+        tk.Button(bar, text="Отключить", command=disconnect, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=12, pady=7).pack(side="right")
+        if self.github.connected:
+            load_repos()
+
+    def open_email(self):
+        win = tk.Toplevel(self.root)
+        win.title("Почта — подключение")
+        win.geometry("720x560")
+        win.configure(bg=self.BG)
+        tk.Label(win, text="Электронная почта", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 18, "bold")).pack(anchor="w", padx=20, pady=(18, 4))
+        tk.Label(win, text="Поддержка IMAP/SMTP. Используй пароль приложения, если он требуется провайдером.",
+                 bg=self.BG, fg=self.MUTED, wraplength=660).pack(anchor="w", padx=20)
+        form = tk.Frame(win, bg=self.BG)
+        form.pack(fill="x", padx=20, pady=14)
+        fields = {}
+        defaults = {"Адрес": self.email_account.get("address", ""),
+                    "IMAP сервер": self.email_account.get("imap_host", ""),
+                    "SMTP сервер": self.email_account.get("smtp_host", ""),
+                    "SMTP порт": str(self.email_account.get("smtp_port", 587))}
+        for label, default in defaults.items():
+            tk.Label(form, text=label, bg=self.BG, fg=self.MUTED).pack(anchor="w", pady=(5, 2))
+            entry = tk.Entry(form, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
+                             relief="flat", font=("Segoe UI", 11))
+            entry.insert(0, default)
+            entry.pack(fill="x", ipady=7)
+            fields[label] = entry
+        tk.Label(form, text="Пароль приложения (будет сохранён в хранилище Windows)",
+                 bg=self.BG, fg=self.MUTED).pack(anchor="w", pady=(8, 2))
+        password = tk.Entry(form, show="*", bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT, relief="flat")
+        password.pack(fill="x", ipady=7)
+        def save():
+            try:
+                account = self.email.save_account(fields["Адрес"].get(), password.get(),
+                    fields["IMAP сервер"].get(), fields["SMTP сервер"].get(),
+                    int(fields["SMTP порт"].get() or 587))
+                self.email_account = account
+                CONFIG["email_account"] = account
+                CONFIG_PATH.write_text(json.dumps(CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+                messagebox.showinfo("Почта", "Настройки сохранены. Пароль хранится отдельно в Windows.", parent=win)
+                load_mail()
+            except Exception as exc:
+                messagebox.showerror("Почта", str(exc), parent=win)
+        tk.Button(form, text="Сохранить подключение", command=save, bg=self.ACCENT, fg="#06111e",
+                  relief="flat", padx=12, pady=9).pack(anchor="w", pady=12)
+        listing = tk.Listbox(win, bg=self.PANEL, fg=self.TEXT, relief="flat", font=("Segoe UI", 9))
+        listing.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+        def load_mail():
+            listing.delete(0, "end")
+            try:
+                for item in self.email.list_messages(self.email_account):
+                    listing.insert("end", f"{item['date']} | {item['from']} | {item['subject']}")
+                    listing.insert("end", item["body"][:500].replace("\n", " "))
+                    listing.insert("end", "—" * 50)
+            except Exception as exc:
+                messagebox.showerror("Почта", str(exc), parent=win)
+        tk.Button(win, text="Проверить входящие", command=load_mail, bg=self.PANEL2, fg=self.TEXT,
+                  relief="flat", padx=12, pady=8).pack(anchor="w", padx=20, pady=(0, 14))
 
     def open_settings(self):
         try:
