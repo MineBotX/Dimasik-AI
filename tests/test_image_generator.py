@@ -5,6 +5,8 @@ from assistant.image_generator import (
     MODEL_SHA256,
     MODEL_SIZE,
     MODEL_URL,
+    ENGINE_CPU_SHA256,
+    ENGINE_VULKAN_SHA256,
     clean_image_prompt,
     is_image_request,
 )
@@ -52,6 +54,8 @@ class ImageRequestTests(unittest.TestCase):
         self.assertEqual(MODEL_SIZE, 1_747_190_784)
         self.assertEqual(len(MODEL_SHA256), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in MODEL_SHA256))
+        self.assertEqual(len(ENGINE_CPU_SHA256), 64)
+        self.assertEqual(len(ENGINE_VULKAN_SHA256), 64)
 
     def test_model_state_is_false_when_missing(self):
         from pathlib import Path
