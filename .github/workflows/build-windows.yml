@@ -73,7 +73,9 @@ jobs:
         with:
           tag_name: latest
           name: Dimasik ${{ github.sha }}
-          body: "Run Install-Dimasik.bat to install the locally trained Dimasik neural assistant. No Ollama or Qwen required."
+          body: "Build: ${{ github.sha }}
+
+Run Install-Dimasik.bat to install the locally trained Dimasik neural assistant. No Ollama or Qwen required."
           files: Dimasik-Windows-GUI-x64.zip
           overwrite_files: true
           make_latest: true
