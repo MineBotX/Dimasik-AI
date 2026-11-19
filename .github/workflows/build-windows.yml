@@ -45,6 +45,16 @@ jobs:
           Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile "$env:TEMP\vosk-model.zip"
           Expand-Archive -LiteralPath "$env:TEMP\vosk-model.zip" -DestinationPath models -Force
           if (!(Test-Path "models/vosk-model-small-ru-0.22/conf/model.conf")) { throw "Vosk model download failed" }
+      - name: Download llama.cpp CPU runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+          New-Item -ItemType Directory -Force tools/llama | Out-Null
+          $runtimeZip = "$env:TEMP/llama-cpu.zip"
+          Invoke-WebRequest "https://github.com/ggml-org/llama.cpp/releases/download/b12328/llama-b12328-bin-win-cpu-x64.zip" -OutFile $runtimeZip
+          Expand-Archive -LiteralPath $runtimeZip -DestinationPath tools/llama -Force
+          if (!(Get-ChildItem tools/llama -Filter llama-server.exe -Recurse)) { throw "llama-server.exe was not found in the CPU runtime archive" }
       - name: Train Dimasik neural core
         run: python train_brain.py
       - name: Build GUI executable
@@ -60,6 +70,7 @@ jobs:
           Copy-Item update.ps1 dist/Dimasik/update.ps1
           Copy-Item models/vosk-model-small-ru-0.22 dist/Dimasik/models/vosk-model-small-ru-0.22 -Recurse -Force
           Copy-Item brain dist/Dimasik/brain -Recurse -Force
+          Copy-Item tools/llama dist/Dimasik/tools/llama -Recurse -Force
           Copy-Item dist/Dimasik (Join-Path $package "Dimasik") -Recurse -Force
           Copy-Item install-runtime.ps1 $package
           Copy-Item Install-Dimasik.bat $package
