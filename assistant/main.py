@@ -382,7 +382,6 @@ class DimasikApp:
         self.avatar.pack(side="left", padx=(0, 10))
         tk.Label(hero, text="Твой помощник всегда рядом", bg=self.PANEL, fg=self.TEXT,
                  font=("Segoe UI", 11, "bold")).pack(side="left")
-        self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
 
         bottom = tk.Frame(body, bg=self.BG)
         bottom.pack(side="bottom", fill="x", pady=(8, 0))
@@ -424,6 +423,7 @@ class DimasikApp:
         self.chat.tag_configure("user", foreground=self.ACCENT, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=7, lmargin2=7)
+        self._append("СИСТЕМА", "Привет! Я Димасик. Напиши сообщение или включи микрофон.", "system")
         tk.Label(self.root, text="Локальный помощник • Vosk • собственная нейросеть • интеграции отдельно",
                  bg=self.BG, fg="#667995", font=("Segoe UI", 7), pady=4).pack()
 
