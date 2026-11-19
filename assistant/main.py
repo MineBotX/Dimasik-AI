@@ -18,11 +18,11 @@ import pyttsx3
 import requests
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model
+from assistant.brain import DimasikBrain
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
 VOSK_MODEL = ROOT / "models" / "vosk-model-small-ru-0.22"
-OLLAMA_URL = "http://127.0.0.1:11434"
 SAMPLE_RATE = 16000
 audio_queue = queue.Queue(maxsize=80)
 history = deque(maxlen=16)
@@ -32,7 +32,6 @@ RELEASE_API = "https://api.github.com/repos/MineBotX/Dimasik-AI/releases/tags/la
 DEFAULTS = {
     "assistant_name": "Димасик",
     "wake_words": ["димасик", "димас", "димон"],
-    "ollama_model": "qwen2.5:3b",
     "voice_rate": 172,
     "voice_volume": 1.0,
     "personality": "Дружелюбный, умный, с лёгким чувством юмора. Отвечай по-русски и обычно кратко.",
@@ -78,7 +77,7 @@ def load_config():
 
 CONFIG = load_config()
 ASSISTANT_NAME = str(CONFIG.get("assistant_name", "Димасик"))
-OLLAMA_MODEL = str(CONFIG.get("ollama_model", "qwen2.5:3b"))
+BRAIN = DimasikBrain()
 WAKE_WORDS = tuple(CONFIG["wake_words"])
 tts = pyttsx3.init()
 tts.setProperty("rate", max(100, min(250, int(CONFIG.get("voice_rate", 172)))))
@@ -169,46 +168,15 @@ def listen(model, prompt):
                     return phrase
 
 
-def ollama_ready():
-    try:
-        response = requests.get(OLLAMA_URL + "/api/tags", timeout=3)
-        response.raise_for_status()
-        models = response.json().get("models", [])
-        installed = {str(item.get("name", "")) for item in models}
-        return OLLAMA_MODEL in installed
-    except (requests.RequestException, ValueError, TypeError):
-        return False
+def brain_ready():
+    return BRAIN.ready
 
 
 def ask_local_ai(prompt):
     history.append({"role": "user", "content": prompt})
-    transcript = "\n".join(
-        ("Пользователь: " if x["role"] == "user" else ASSISTANT_NAME + ": ") + x["content"]
-        for x in history
-    )
-    system = (
-        "Ты " + ASSISTANT_NAME + ", локальный русскоязычный помощник Windows. "
-        + str(CONFIG.get("personality", DEFAULTS["personality"]))
-        + " Учитывай историю разговора. Не выдумывай выполненные действия. "
-        "Если не знаешь — честно скажи.\n\n"
-    )
-    try:
-        r = requests.post(OLLAMA_URL + "/api/generate", json={
-            "model": OLLAMA_MODEL,
-            "prompt": system + transcript + "\n" + ASSISTANT_NAME + ":",
-            "stream": False,
-            "options": {"temperature": 0.7, "num_ctx": 4096}
-        }, timeout=(5, 180))
-        r.raise_for_status()
-        answer = r.json().get("response", "").strip()
-        if answer:
-            history.append({"role": "assistant", "content": answer})
-            return answer
-        return "Модель не прислала ответ."
-    except requests.Timeout:
-        return "Ответ занимает слишком много времени. Попробуй спросить короче."
-    except requests.RequestException:
-        return "Локальная модель недоступна. Проверь, запущена ли Ollama."
+    answer = BRAIN.answer(prompt)
+    history.append({"role": "assistant", "content": answer})
+    return answer
 
 
 def launch_app(alias):
@@ -510,12 +478,12 @@ class DimasikApp:
             self.set_status("Ошибка модели", "#ff7777")
             self._append("СИСТЕМА", "Не удалось загрузить модель речи: " + str(exc), "system")
             return
-        if ollama_ready():
+        if brain_ready():
             self.set_status("Готов к работе", self.GREEN)
             self._append("СИСТЕМА", "Готов к работе. Нажми «Включить микрофон» или напиши сообщение.", "system")
         else:
-            self.set_status("Нужна установка Ollama / Qwen", "#f4c76b")
-            self._append("СИСТЕМА", "Распознавание речи готово, но локальная модель Qwen не найдена или Ollama не запущена. Закрой Димасика и запусти Install-Dimasik.bat из папки с установщиком.", "system")
+            self.set_status("Нужно обучение ядра", "#f4c76b")
+            self._append("СИСТЕМА", "Распознавание речи готово. Моё собственное нейросетевое ядро ещё не обучено. Добавь примеры в training_data.txt и запусти train_brain.py.", "system")
 
     def send_text(self):
         text = self.entry.get().strip()
