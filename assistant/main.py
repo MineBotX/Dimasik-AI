@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox, simpledialog, filedialog, filedialog
+from tkinter import messagebox, simpledialog, filedialog, ttk
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -545,10 +545,11 @@ class DimasikApp:
         header_content = header.content
         left = tk.Frame(header_content, bg=self.PANEL)
         left.pack(side="left", fill="both", expand=True)
-        tk.Label(
+        self.name_label = tk.Label(
             left, text="◈  " + ASSISTANT_NAME, bg=self.PANEL, fg=self.TEXT,
             font=("Segoe UI", 21, "bold"),
-        ).pack(anchor="w")
+        )
+        self.name_label.pack(anchor="w")
         tk.Label(
             left, text="ЛОКАЛЬНЫЙ ГОЛОСОВОЙ ПОМОЩНИК", bg=self.PANEL,
             fg=self.MUTED, font=("Segoe UI", 8, "bold"),
@@ -1305,12 +1306,283 @@ class DimasikApp:
         send_button.configure(command=send)
 
     def open_settings(self):
+        """Открывает полноценные настройки помощника внутри приложения."""
+        win = tk.Toplevel(self.root)
+        win.title("Настройки Димасика")
+        win.geometry("820x720")
+        win.minsize(700, 600)
+        win.configure(bg=self.BG)
+        win.transient(self.root)
+
+        tk.Label(
+            win, text="Настройки Димасика", bg=self.BG, fg=self.TEXT,
+            font=("Segoe UI", 19, "bold"),
+        ).pack(anchor="w", padx=22, pady=(18, 2))
+        tk.Label(
+            win, text="Измени параметры и нажми «Сохранить». Перезапуск не нужен.",
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9),
+        ).pack(anchor="w", padx=22, pady=(0, 12))
+
+        style = ttk.Style(win)
         try:
-            if not CONFIG_PATH.exists():
-                CONFIG_PATH.write_text(json.dumps(CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
-            subprocess.Popen(["notepad.exe", str(CONFIG_PATH)])
-        except OSError as exc:
-            messagebox.showerror("Настройки", str(exc))
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(
+            "Dimasik.TNotebook", background=self.BG, borderwidth=0,
+            tabmargins=(2, 4, 2, 0),
+        )
+        style.configure(
+            "Dimasik.TNotebook.Tab", background=self.PANEL2,
+            foreground=self.TEXT, padding=(16, 9), font=("Segoe UI", 9, "bold"),
+        )
+        style.map(
+            "Dimasik.TNotebook.Tab",
+            background=[("selected", self.ACCENT)],
+            foreground=[("selected", "#071522")],
+        )
+        notebook = ttk.Notebook(win, style="Dimasik.TNotebook")
+        notebook.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+
+        basic = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
+        voice = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
+        commands = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
+        notebook.add(basic, text="Основные")
+        notebook.add(voice, text="Голос")
+        notebook.add(commands, text="Команды")
+
+        def label(parent, text, pady=(10, 4)):
+            tk.Label(
+                parent, text=text, bg=self.BG, fg=self.MUTED,
+                font=("Segoe UI", 9, "bold"),
+            ).pack(anchor="w", pady=pady)
+
+        def entry(parent, value):
+            field = tk.Entry(
+                parent, bg=self.PANEL, fg=self.TEXT,
+                insertbackground=self.TEXT, relief="flat",
+                font=("Segoe UI", 10), highlightthickness=1,
+                highlightbackground=self.BORDER, highlightcolor=self.ACCENT,
+            )
+            field.pack(fill="x", ipady=8)
+            field.insert(0, str(value or ""))
+            return field
+
+        label(basic, "Имя помощника", (0, 4))
+        name_field = entry(basic, CONFIG.get("assistant_name", "Димасик"))
+        label(basic, "Ключевые слова для активации (через запятую)")
+        wake_field = entry(basic, ", ".join(CONFIG.get("wake_words", [])))
+        label(basic, "Характер и стиль ответов")
+        personality = tk.Text(
+            basic, height=7, bg=self.PANEL, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", wrap="word",
+            font=("Segoe UI", 10), padx=10, pady=9,
+            highlightthickness=1, highlightbackground=self.BORDER,
+        )
+        personality.pack(fill="x")
+        personality.insert("1.0", str(CONFIG.get("personality", "")))
+        label(basic, "Адрес поисковика (обязательно оставь {query})")
+        search_field = entry(
+            basic, CONFIG.get("search_url", "https://www.google.com/search?q={query}")
+        )
+        tk.Label(
+            basic,
+            text="Пример: https://www.google.com/search?q={query}",
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8),
+        ).pack(anchor="w", pady=(4, 0))
+
+        label(voice, "Голос для озвучивания")
+        voice_values = ["Автоматический русский голос"]
+        voice_ids = {"Автоматический русский голос": ""}
+        available_voices = []
+        try:
+            available_voices = list(tts.getProperty("voices") or [])
+        except Exception:
+            available_voices = []
+        for index, item in enumerate(available_voices):
+            display = f"{item.name or 'Голос'} ({index + 1})"
+            voice_values.append(display)
+            voice_ids[display] = str(item.id)
+        voice_box = ttk.Combobox(
+            voice, values=voice_values, state="readonly",
+            font=("Segoe UI", 10),
+        )
+        selected_voice = ""
+        configured_voice = str(CONFIG.get("voice_name", "")).strip().lower()
+        for display, voice_id in voice_ids.items():
+            if configured_voice and configured_voice in (voice_id + " " + display).lower():
+                selected_voice = display
+                break
+        voice_box.set(selected_voice or voice_values[0])
+        voice_box.pack(fill="x", ipady=5)
+
+        label(voice, "Скорость речи")
+        rate_value = tk.IntVar(value=max(100, min(250, int(CONFIG.get("voice_rate", 165)))))
+        rate_scale = tk.Scale(
+            voice, from_=100, to=250, orient="horizontal",
+            variable=rate_value, bg=self.BG, fg=self.TEXT,
+            troughcolor=self.PANEL2, activebackground=self.ACCENT,
+            highlightthickness=0, font=("Segoe UI", 9),
+            length=520,
+        )
+        rate_scale.pack(anchor="w", fill="x")
+
+        label(voice, "Громкость голоса")
+        volume_value = tk.IntVar(
+            value=round(max(0.0, min(1.0, float(CONFIG.get("voice_volume", 1.0)))) * 100)
+        )
+        volume_scale = tk.Scale(
+            voice, from_=0, to=100, orient="horizontal",
+            variable=volume_value, bg=self.BG, fg=self.TEXT,
+            troughcolor=self.PANEL2, activebackground=self.ACCENT,
+            highlightthickness=0, font=("Segoe UI", 9),
+            length=520,
+        )
+        volume_scale.pack(anchor="w", fill="x")
+        tk.Label(
+            voice,
+            text="Изменения голоса применяются сразу после сохранения.",
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8),
+        ).pack(anchor="w", pady=(14, 0))
+
+        label(commands, "Сайты — одна строка на сайт: название = адрес", (0, 4))
+        websites_box = tk.Text(
+            commands, height=8, bg=self.PANEL, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", wrap="none",
+            font=("Consolas", 9), padx=10, pady=8,
+        )
+        websites_box.pack(fill="both", expand=True)
+        for alias, url in CONFIG.get("websites", {}).items():
+            websites_box.insert("end", f"{alias} = {url}\n")
+
+        label(commands, "Программы — название = команда или путь", (12, 4))
+        apps_box = tk.Text(
+            commands, height=8, bg=self.PANEL, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", wrap="none",
+            font=("Consolas", 9), padx=10, pady=8,
+        )
+        apps_box.pack(fill="both", expand=True)
+        for alias, command in CONFIG.get("apps", {}).items():
+            if isinstance(command, list) and len(command) == 1:
+                display_command = command[0]
+            elif isinstance(command, list):
+                display_command = json.dumps(command, ensure_ascii=False)
+            else:
+                display_command = str(command)
+            apps_box.insert("end", f"{alias} = {display_command}\n")
+        tk.Label(
+            commands,
+            text='Пример: браузер = chrome.exe   •   аргументы можно указать списком JSON: ["chrome.exe", "--new-window"]',
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8),
+            wraplength=740, justify="left",
+        ).pack(anchor="w", pady=(7, 0))
+
+        def read_pairs(widget, category):
+            result = {}
+            for line_number, raw_line in enumerate(widget.get("1.0", "end").splitlines(), 1):
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    raise ValueError(f"Строка {line_number}: используй формат название = значение.")
+                alias, value = (part.strip() for part in line.split("=", 1))
+                alias = alias.lower()
+                if not alias or not value:
+                    raise ValueError(f"Строка {line_number}: название и значение не должны быть пустыми.")
+                if alias in result:
+                    raise ValueError(f"Строка {line_number}: команда «{alias}» указана дважды.")
+                if category == "websites":
+                    if not value.startswith(("https://", "http://")):
+                        raise ValueError(f"Строка {line_number}: адрес сайта должен начинаться с http:// или https://.")
+                    result[alias] = value
+                else:
+                    if value.startswith("["):
+                        try:
+                            command = json.loads(value)
+                        except json.JSONDecodeError as exc:
+                            raise ValueError(f"Строка {line_number}: проверь список аргументов JSON: {exc.msg}.")
+                        if not isinstance(command, list) or not command or not all(
+                            isinstance(part, str) and part.strip() for part in command
+                        ):
+                            raise ValueError(f"Строка {line_number}: список программы должен содержать текстовые аргументы.")
+                        result[alias] = command
+                    else:
+                        result[alias] = [value]
+            return result
+
+        def save():
+            global ASSISTANT_NAME, WAKE_WORDS
+            try:
+                assistant_name = name_field.get().strip()
+                if not assistant_name:
+                    raise ValueError("Укажи имя помощника.")
+                wake_words = list(dict.fromkeys(
+                    word.strip().lower()
+                    for word in wake_field.get().replace(";", ",").split(",")
+                    if word.strip()
+                ))
+                if not wake_words:
+                    raise ValueError("Добавь хотя бы одно ключевое слово для активации.")
+                search_url = search_field.get().strip()
+                if not search_url.startswith(("https://", "http://")) or "{query}" not in search_url:
+                    raise ValueError("В адресе поиска должен быть http:// или https:// и шаблон {query}.")
+                websites = read_pairs(websites_box, "websites")
+                apps = read_pairs(apps_box, "apps")
+                updated = dict(CONFIG)
+                updated.update({
+                    "assistant_name": assistant_name,
+                    "wake_words": wake_words,
+                    "voice_rate": int(rate_value.get()),
+                    "voice_name": voice_ids.get(voice_box.get(), ""),
+                    "voice_volume": volume_value.get() / 100.0,
+                    "personality": personality.get("1.0", "end-1c").strip(),
+                    "search_url": search_url,
+                    "websites": websites,
+                    "apps": apps,
+                })
+                temp_path = CONFIG_PATH.with_suffix(".tmp")
+                temp_path.write_text(
+                    json.dumps(updated, ensure_ascii=False, indent=2, allow_nan=False),
+                    encoding="utf-8",
+                )
+                temp_path.replace(CONFIG_PATH)
+
+                CONFIG.clear()
+                CONFIG.update(updated)
+                ASSISTANT_NAME = assistant_name
+                WAKE_WORDS = tuple(wake_words)
+                self.root.title(ASSISTANT_NAME + " — локальный ИИ")
+                self.name_label.configure(text="◈  " + ASSISTANT_NAME)
+                tts.setProperty("rate", updated["voice_rate"])
+                tts.setProperty("volume", updated["voice_volume"])
+                selected_id = updated["voice_name"]
+                if selected_id:
+                    tts.setProperty("voice", selected_id)
+                else:
+                    configure_voice()
+                messagebox.showinfo(
+                    "Настройки",
+                    "Готово! Настройки сохранены и уже применены.",
+                    parent=win,
+                )
+                win.destroy()
+            except (OSError, ValueError, tk.TclError) as exc:
+                messagebox.showerror("Не удалось сохранить настройки", str(exc), parent=win)
+
+        footer = tk.Frame(win, bg=self.BG)
+        footer.pack(fill="x", padx=18, pady=(0, 16))
+        tk.Button(
+            footer, text="Сохранить", command=save,
+            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            relief="flat", padx=20, pady=9,
+            font=("Segoe UI", 9, "bold"), cursor="hand2",
+        ).pack(side="right")
+        tk.Button(
+            footer, text="Отмена", command=win.destroy,
+            bg=self.PANEL2, fg=self.TEXT, activebackground="#2a3d5e",
+            relief="flat", padx=18, pady=9,
+            font=("Segoe UI", 9), cursor="hand2",
+        ).pack(side="right", padx=(0, 8))
 
     def clear_chat(self):
         history.clear()
