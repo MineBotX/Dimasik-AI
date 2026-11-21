@@ -282,7 +282,11 @@ def ask_local_ai(prompt):
 
     # Handle greetings and identity questions before web search. They do not
     # require internet and should never fall through to the fact-search path.
-    answer = conversational_reply(prompt, list(history)[:-1])
+    answer = conversational_reply(
+        prompt, list(history)[:-1],
+        roast_enabled=CONFIG.get("roast_mode_enabled", False),
+        roast_level=CONFIG.get("roast_mode_level", "medium"),
+    )
     if answer is not None:
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
@@ -327,7 +331,7 @@ def ask_local_ai(prompt):
                         "предупреди, что сведения не были проверены в интернете. Вопрос: " + query,
                         conversation=list(history)[:-1],
                         max_tokens=1600,
-                        personality=str(CONFIG.get("personality", "")),
+                        personality=current_personality(),
                     )
                 except Exception as exc:
                     answer = "Не удалось получить результаты поиска или запустить локальную модель: " + str(exc)
@@ -357,7 +361,7 @@ def ask_local_ai(prompt):
             answer = CODE_WRITER.generate_chat(
                 normalized,
                 conversation=list(history)[:-1],
-                personality=str(CONFIG.get("personality", "")),
+                personality=current_personality(),
             )
         except Exception as exc:
             answer = "Не удалось запустить локальную модель Granite: " + str(exc)
