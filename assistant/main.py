@@ -26,6 +26,7 @@ from crosshair_api import start_server as start_crosshair_api
 from code_writer import is_code_request
 from local_coder import LocalCoder
 from dialogue import conversational_reply
+from personality import build_personality
 from modern_widgets import RoundedButton, RoundedPanel
 from image_generator import LocalImageGenerator, is_image_request
 from productivity import ProductivityStore
@@ -47,6 +48,8 @@ DEFAULTS = {
     "voice_name": "",
     "voice_volume": 1.0,
     "personality": "Дружелюбный, креативный, умный, с среднем чувством юмора. Любит когда его хвалят. Отвечай по-русски и обычно кратко.",
+    "roast_mode_enabled": False,
+    "roast_mode_level": "medium",
     "search_url": "https://www.google.com/search?q={query}",
     "websites": {
         "youtube": "https://www.youtube.com",
@@ -212,6 +215,15 @@ def brain_ready():
     return BRAIN.ready
 
 
+def current_personality():
+    """Combine the saved personality with the optional playful profanity style."""
+    return build_personality(
+        CONFIG.get("personality", ""),
+        roast_enabled=CONFIG.get("roast_mode_enabled", False),
+        roast_level=CONFIG.get("roast_mode_level", "medium"),
+    )
+
+
 def _looks_like_question(prompt):
     value = str(prompt).strip().lower()
     if "?" in value:
@@ -300,7 +312,7 @@ def ask_local_ai(prompt):
                         + source_text,
                         conversation=list(history)[:-1],
                         max_tokens=1800,
-                        personality=str(CONFIG.get("personality", "")),
+                        personality=current_personality(),
                     )
                 except Exception as exc:
                     answer = source_text + "\n\nНе удалось запустить локальное обобщение Granite: " + str(exc)
@@ -1347,9 +1359,11 @@ class DimasikApp:
         basic = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
         voice = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
         commands = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
+        manner = tk.Frame(notebook, bg=self.BG, padx=18, pady=16)
         notebook.add(basic, text="Основные")
         notebook.add(voice, text="Голос")
         notebook.add(commands, text="Команды")
+        notebook.add(manner, text="Манера общения")
 
         def label(parent, text, pady=(10, 4)):
             tk.Label(
@@ -1445,6 +1459,49 @@ class DimasikApp:
             bg=self.BG, fg=self.MUTED, font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(14, 0))
 
+        label(manner, "Режим дружеской ругани", (0, 4))
+        roast_enabled = tk.BooleanVar(
+            value=bool(CONFIG.get("roast_mode_enabled", False))
+        )
+        tk.Checkbutton(
+            manner,
+            text="Разрешить Димасику материться и подкалывать меня",
+            variable=roast_enabled,
+            bg=self.BG, fg=self.TEXT, activebackground=self.BG,
+            activeforeground=self.TEXT, selectcolor=self.PANEL2,
+            font=("Segoe UI", 11, "bold"),
+        ).pack(anchor="w", pady=(4, 10))
+        tk.Label(
+            manner,
+            text="Уровень ругани",
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9, "bold"),
+        ).pack(anchor="w", pady=(4, 5))
+        roast_levels = {
+            "Лёгкий — редкие мягкие ругательства": "light",
+            "Средний — заметные маты и подколы": "medium",
+            "Жёсткий — крепкая ругань и дерзкий юмор": "strong",
+        }
+        roast_box = ttk.Combobox(
+            manner, values=list(roast_levels), state="readonly",
+            font=("Segoe UI", 10),
+        )
+        saved_level = str(CONFIG.get("roast_mode_level", "medium")).lower()
+        roast_box.set(next(
+            (label_text for label_text, value in roast_levels.items() if value == saved_level),
+            "Средний — заметные маты и подколы",
+        ))
+        roast_box.pack(fill="x", ipady=6)
+        tk.Label(
+            manner,
+            text=(
+                "Режим выключен по умолчанию. При включении Димасик сможет шутливо "
+                "ругаться в обычном разговоре. В серьёзных ситуациях он должен сохранять "
+                "уважительный тон и не использовать угрозы или дискриминационные оскорбления."
+            ),
+            bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9),
+            wraplength=700, justify="left",
+        ).pack(anchor="w", pady=(16, 0))
+
         label(commands, "Сайты — одна строка на сайт: название = адрес", (0, 4))
         websites_box = tk.Text(
             commands, height=8, bg=self.PANEL, fg=self.TEXT,
@@ -1536,6 +1593,10 @@ class DimasikApp:
                     "voice_name": voice_ids.get(voice_box.get(), ""),
                     "voice_volume": volume_value.get() / 100.0,
                     "personality": personality.get("1.0", "end-1c").strip(),
+                    "roast_mode_enabled": bool(roast_enabled.get()),
+                    "roast_mode_level": roast_levels.get(
+                        roast_box.get(), "medium"
+                    ),
                     "search_url": search_url,
                     "websites": websites,
                     "apps": apps,
