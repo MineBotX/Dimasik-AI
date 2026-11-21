@@ -49,5 +49,7 @@
     "wordpad": [
       "write.exe"
     ]
-  }
+  },
+  "roast_mode_enabled": false,
+  "roast_mode_level": "medium"
 }
