@@ -2,11 +2,8 @@
 from __future__ import annotations
 
 
-def conversational_reply(prompt: str, history=None, *, roast_enabled=False, roast_level="medium"):
-    """Return a short offline reply to common social turns, or None.
-
-    History is an optional sequence of {"role": ..., "content": ...} entries.
-    """
+def _conversational_reply_base(prompt: str, history=None):
+    """Return a short offline reply to common social turns, or None."""
     text = str(prompt).strip().lower()
     items = list(history or ())
     previous = next(
@@ -43,17 +40,26 @@ def conversational_reply(prompt: str, history=None, *, roast_enabled=False, roas
         return "Я Димасик, твой локальный помощник. Моё экспериментальное нейросетевое ядро называется DimaCore."
     if any(x in text for x in ("скучно", "нечего делать", "давай поговорим")):
         return "Давай поболтаем! Можем обсудить игры, фильмы, технологии или твой день. Что выбираешь?"
-    if roast_enabled:
-        # Keep canned social replies consistent with the selectable banter mode.
-        serious_topics = (
-            "мне грустно", "плохо на душе", "я расстроен", "мне одиноко",
-            "мне страшно", "умер", "потерял близкого", "депресс",
-        )
-        if not any(term in text for term in serious_topics):
-            roast_lines = {
-                "light": "Ну ты и затейник 😄",
-                "medium": "Ну ты и кадр, чёрт побери 😄",
-                "strong": "Ну ты и ходячий пиздец, конечно 😄",
-            }
-            answer += " " + roast_lines.get(str(roast_level).lower(), roast_lines["medium"])
-    return answer
+    return None
+
+
+def conversational_reply(prompt: str, history=None, *, roast_enabled=False, roast_level="medium"):
+    """Return an offline social reply with optional user-enabled friendly banter."""
+    answer = _conversational_reply_base(prompt, history)
+    if answer is None or not roast_enabled:
+        return answer
+
+    text = str(prompt).strip().lower()
+    serious_topics = (
+        "мне грустно", "плохо на душе", "я расстроен", "мне одиноко",
+        "мне страшно", "умер", "потерял близкого", "депресс",
+    )
+    if any(term in text for term in serious_topics):
+        return answer
+
+    roast_lines = {
+        "light": "Ну ты и затейник 😄",
+        "medium": "Ну ты и кадр, чёрт побери 😄",
+        "strong": "Ну ты и ходячий пиздец, конечно 😄",
+    }
+    return answer + " " + roast_lines.get(str(roast_level).lower(), roast_lines["medium"])
