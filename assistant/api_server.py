@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import hmac
+from contextlib import contextmanager
 import json
 import os
 import secrets
@@ -34,6 +34,16 @@ MODEL_ID = "dimasik"
 _coder = LocalCoder(ROOT)
 _rate_lock = threading.Lock()
 _rate_events: dict[str, list[float]] = {}
+
+
+@contextmanager
+def _connection():
+    conn = _db()
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _db() -> sqlite3.Connection:
@@ -65,7 +75,7 @@ def create_key(name: str, rpm: int = DEFAULT_RPM) -> str:
     token = "dm_live_" + secrets.token_urlsafe(32)
     prefix = token[:16]
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    with _db() as conn:
+    with _connection() as conn:
         conn.execute(
             "INSERT INTO api_keys (id, prefix, secret_hash, name, rpm) VALUES (?, ?, ?, ?, ?)",
             (uuid.uuid4().hex, prefix, digest, name, int(rpm)),
@@ -99,7 +109,6 @@ def _authenticate(handler):
             )
             conn.commit()
     if row is None:
-        # Constant-time comparison is used for the stored digest comparison path.
         return None
     return dict(row)
 
@@ -220,7 +229,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 conversation.append({"role": role, "content": content})
                 if role == "user":
                     last_user = content
-        if not last_user or conversation[-1]["role"] != "user":
+        if not conversation or conversation[-1]["role"] != "user" or not conversation[-1]["content"].strip():
             self._error(400, "The final message must be a non-empty user message.",
                         "invalid_messages")
             return
