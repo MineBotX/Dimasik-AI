@@ -58,11 +58,12 @@ The API accepts `user`, `assistant`, and `system` messages. Caller-provided syst
 
 ## Remote deployment and security
 
-Do not expose this plain HTTP server directly to the public internet. For a remote service, run Dimasik on a trusted host and put a TLS reverse proxy (for example Caddy or nginx) or a private VPN in front of it. Only then, if required, explicitly opt in to a non-loopback bind:
+Do not expose this plain HTTP server directly to the public internet. For a remote service, run Dimasik on a trusted host and keep it bound to loopback. Put Caddy or nginx on the same host to terminate HTTPS and proxy requests to `127.0.0.1:8787`.
 
-```powershell
-$env:DIMASIK_ALLOW_REMOTE_BIND = "1"
-python -m assistant.api_server serve --host 127.0.0.1 --port 8787
-```
+Example Caddy setup:
+1. Point a DNS A/AAAA record for your domain to the server.
+2. Install Caddy on that host and copy `deploy/Caddyfile.example` to its Caddy configuration, replacing `api.example.com` with your domain.
+3. Allow inbound TCP 80 and 443 in the host firewall; do not expose port 8787 or the llama.cpp model port.
+4. Start Dimasik with `python -m assistant.api_server serve --host 127.0.0.1 --port 8787` and reload Caddy. Caddy obtains and renews the TLS certificate automatically.
 
-Prefer keeping the API process bound to loopback and letting the reverse proxy handle TLS/authenticated network access. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments.
+A non-loopback bind is intentionally disabled by default. Only consider `DIMASIK_ALLOW_REMOTE_BIND=1` for a separately secured network architecture; it is not needed for the reverse-proxy setup. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments.
