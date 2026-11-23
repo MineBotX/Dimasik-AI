@@ -1,0 +1,68 @@
+# Dimasik API (OpenAI-compatible)
+
+Dimasik exposes the locally installed Granite model through a small authenticated HTTP API. The API is optional and does not change the desktop app's normal startup.
+
+## Requirements
+
+- Python environment and dependencies from `requirements.txt`
+- Dimasik's local Granite GGUF model and `llama-server.exe` installed through the desktop app
+
+## Create a key
+
+From the repository root:
+
+```powershell
+python -m assistant.api_server create-key --name "Crosshair Service" --rpm 30
+```
+
+The full `dm_live_...` token is displayed only once. Store it in the service's backend secret store / environment variables. Never put it in browser JavaScript, a desktop client, a public repository, or a URL.
+
+To revoke a key, use the visible prefix (first 16 characters):
+
+```powershell
+python -m assistant.api_server revoke-key --prefix dm_live_xxxxx
+```
+
+Keys are stored as SHA-256 hashes in `brain/api_keys.sqlite3`; the raw key is not stored. Each key has its own requests-per-minute limit (default 30, configurable up to 600 when creating it).
+
+## Start the API
+
+```powershell
+python -m assistant.api_server serve
+```
+
+Default address: `http://127.0.0.1:8787`. The server is loopback-only by default. The health endpoint is public; model and chat endpoints require a key.
+
+```powershell
+curl http://127.0.0.1:8787/health
+```
+
+## Chat request
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:DIMASIK_API_KEY" }
+$body = @{
+  model = "dimasik"
+  messages = @(@{ role = "user"; content = "Привет, Димасик!" })
+  max_tokens = 512
+} | ConvertTo-Json -Depth 8
+
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8787/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($body))
+```
+
+OpenAI-compatible routes:
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+The API accepts `user`, `assistant`, and `system` messages. Caller-provided system messages are ignored so a client cannot replace Dimasik's built-in instructions. Streaming, tools/function calling, image input, and exact token accounting are not implemented yet. `usage` fields are returned as zero placeholders.
+
+## Remote deployment and security
+
+Do not expose this plain HTTP server directly to the public internet. For a remote service, run Dimasik on a trusted host and put a TLS reverse proxy (for example Caddy or nginx) or a private VPN in front of it. Only then, if required, explicitly opt in to a non-loopback bind:
+
+```powershell
+$env:DIMASIK_ALLOW_REMOTE_BIND = "1"
+python -m assistant.api_server serve --host 127.0.0.1 --port 8787
+```
+
+Prefer keeping the API process bound to loopback and letting the reverse proxy handle TLS/authenticated network access. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments.
