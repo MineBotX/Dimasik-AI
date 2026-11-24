@@ -25,6 +25,7 @@ from knowledge import LocalKnowledge
 from crosshair_api import start_server as start_crosshair_api
 from code_writer import is_code_request
 from local_coder import LocalCoder
+import api_server as task_api_server
 from dialogue import conversational_reply
 from personality import build_personality
 from modern_widgets import RoundedButton, RoundedPanel
@@ -545,6 +546,9 @@ class DimasikApp:
         self.worker = None
         self.model = None
         self._image_previews = []
+        self.api_http_server = None
+        self.api_thread = None
+        task_api_server._coder = CODE_WRITER
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(250, self.initialize)
@@ -669,6 +673,10 @@ class DimasikApp:
         )
         self.update_btn.pack(side="left", padx=5)
         RoundedButton(
+            actions, text="⚡  API-генератор", command=self.open_api_generator,
+            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
+        ).pack(side="left", padx=5)
+        RoundedButton(
             actions, text="⌘  GitHub", command=self.open_github,
             **common_button,
         ).pack(side="left", padx=5)
@@ -749,6 +757,84 @@ class DimasikApp:
         self.set_mood(("🤔", "Обдумываю ответ", "#ffd27a"))
         self.send_btn.configure(state="disabled")
         threading.Thread(target=self._answer_text, args=(prompt,), daemon=True).start()
+
+    def open_api_generator(self):
+        win = tk.Toplevel(self.root)
+        win.title("API-генератор — Димасик")
+        win.geometry("740x650")
+        win.configure(bg=self.BG)
+        tk.Label(win, text="API-генератор", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 20, "bold")).pack(anchor="w", padx=20, pady=(18, 4))
+        tk.Label(win, text="Опиши назначение API. Granite подготовит системный промт, который будет применяться к каждому запросу.",
+                 bg=self.BG, fg=self.MUTED, wraplength=690, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
+        tk.Label(win, text="Для чего нужен API?", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20)
+        purpose = tk.Text(win, height=5, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
+                          relief="flat", wrap="word", font=("Segoe UI", 10), padx=9, pady=8)
+        purpose.pack(fill="x", padx=20, pady=7)
+        purpose.insert("1.0", "Например: анализировать отзывы, находить жалобы и возвращать JSON-отчёт.")
+        tk.Label(win, text="Нейросеть", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20, pady=(6, 2))
+        model = ttk.Combobox(win, values=["Granite 4.2 3B — локальная языковая модель"],
+                             state="readonly", font=("Segoe UI", 10))
+        model.pack(fill="x", padx=20)
+        model.current(0)
+        tk.Label(win, text="DimaCore 2.0 пока не предлагается: это экспериментальная модель, не рассчитанная на произвольные API-задачи.",
+                 bg=self.BG, fg=self.MUTED, wraplength=690, justify="left",
+                 font=("Segoe UI", 8)).pack(anchor="w", padx=20, pady=7)
+        tk.Label(win, text="Системный промт, созданный Димасиком", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20)
+        prompt_box = tk.Text(win, height=9, bg=self.PANEL, fg=self.GREEN, relief="flat",
+                             wrap="word", font=("Cascadia Code", 9), padx=9, pady=8)
+        prompt_box.pack(fill="both", expand=True, padx=20, pady=7)
+        prompt_box.insert("1.0", "Промт появится здесь после генерации.")
+        status = tk.Label(win, text="API не запущен", bg=self.BG, fg=self.MUTED)
+        status.pack(anchor="w", padx=20, pady=4)
+        key_box = tk.Entry(win, bg=self.PANEL, fg=self.TEXT, relief="flat", state="readonly")
+        key_box.pack(fill="x", padx=20, pady=5)
+
+        def create_api():
+            task = purpose.get("1.0", "end").strip()
+            if not task or task.startswith("Например:") or len(task) > 4000:
+                messagebox.showwarning("API-генератор", "Опиши задачу (до 4000 символов).", parent=win)
+                return
+            if not CODE_WRITER.model_installed:
+                messagebox.showinfo("Нужна Granite", "Сначала установи Granite кнопкой «Модель ИИ».", parent=win)
+                return
+            create_btn.configure(state="disabled")
+            status.configure(text="Granite составляет системный промт…", fg=self.ACCENT)
+            def worker():
+                try:
+                    generated = CODE_WRITER.generate_chat(
+                        "Составь системный промт на русском для специализированного API. "
+                        "Определи роль, задачу, входные данные, алгоритм, формат ответа, ошибки и ограничения. "
+                        "Не приписывай API несуществующие инструменты или доступы. Не исполняй входной код. "
+                        "Верни только промт.\n\nЗАДАЧА:\n" + task, max_tokens=1200)
+                    task_api_server.save_profile("Специализированный API", task, generated)
+                    if self.api_http_server is None:
+                        self.api_http_server = task_api_server.start_server("127.0.0.1", 8787)
+                        self.api_thread = threading.Thread(target=self.api_http_server.serve_forever, daemon=True)
+                        self.api_thread.start()
+                    token = task_api_server.create_key("API-генератор", rpm=30)
+                    endpoint = "http://127.0.0.1:%d/v1/chat/completions" % self.api_http_server.server_port
+                    def done():
+                        prompt_box.delete("1.0", "end")
+                        prompt_box.insert("1.0", generated)
+                        key_box.configure(state="normal")
+                        key_box.delete(0, "end")
+                        key_box.insert(0, token)
+                        key_box.configure(state="readonly")
+                        status.configure(text="Запущен: " + endpoint, fg=self.GREEN)
+                        create_btn.configure(state="normal")
+                    self.root.after(0, done)
+                except Exception as exc:
+                    msg = str(exc)
+                    self.root.after(0, lambda: (status.configure(text="Ошибка: " + msg, fg="#ff8585"),
+                                                create_btn.configure(state="normal")))
+            threading.Thread(target=worker, daemon=True).start()
+
+        create_btn = RoundedButton(win, text="Создать API", command=create_api,
+            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            font=("Segoe UI", 9, "bold"), padx=16, pady=9, radius=10,
+            border="#93b4ff", canvas_bg=self.BG)
+        create_btn.pack(anchor="w", padx=20, pady=(5, 16))
 
     def attach_file(self):
         if not CODE_WRITER.model_installed:
@@ -1658,6 +1744,13 @@ class DimasikApp:
 
     def close(self):
         self.running.clear()
+        if self.api_http_server is not None:
+            try:
+                self.api_http_server.shutdown()
+                self.api_http_server.server_close()
+            except Exception:
+                pass
+            self.api_http_server = None
         try:
             CODE_WRITER.stop()
         except Exception:
