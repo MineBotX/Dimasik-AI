@@ -24,7 +24,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from assistant.local_coder import LocalCoder
+# Support both `python -m assistant.api_server` and PyInstaller's script-directory imports.
+try:
+    from .local_coder import LocalCoder
+except ImportError:
+    from local_coder import LocalCoder
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "brain" / "api_keys.sqlite3"
