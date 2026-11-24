@@ -556,177 +556,158 @@ class DimasikApp:
         self.root.after(6000, self.check_reminders)
 
     def _build(self):
-        # Header card
-        header = RoundedPanel(
-            self.root, fill=self.PANEL, background=self.BG, radius=20,
-            padding=12, border=self.BORDER, height=100,
-        )
-        header.pack(fill="x", padx=16, pady=(14, 6))
-        header_content = header.content
-        left = tk.Frame(header_content, bg=self.PANEL)
-        left.pack(side="left", fill="both", expand=True)
-        self.name_label = tk.Label(
-            left, text="◈  " + ASSISTANT_NAME, bg=self.PANEL, fg=self.TEXT,
-            font=("Segoe UI", 21, "bold"),
-        )
-        self.name_label.pack(anchor="w")
-        tk.Label(
-            left, text="ЛОКАЛЬНЫЙ ГОЛОСОВОЙ ПОМОЩНИК", bg=self.PANEL,
-            fg=self.MUTED, font=("Segoe UI", 8, "bold"),
-        ).pack(anchor="w", pady=(2, 0))
+        """Современная панель: боковая навигация, карточки функций и статус системы."""
+        self.root.title(ASSISTANT_NAME + " — локальный ИИ")
+        self.root.geometry("1480x900")
+        self.root.minsize(1120, 720)
+        self.root.configure(bg=self.BG)
 
-        right = tk.Frame(header_content, bg=self.PANEL)
-        right.pack(side="right", anchor="e")
+        # Верхняя панель
+        header = tk.Frame(self.root, bg="#101a2a", height=64,
+                          highlightthickness=1, highlightbackground=self.BORDER)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="◉", bg="#101a2a", fg="#35baff",
+                 font=("Segoe UI", 25, "bold")).pack(side="left", padx=(20, 10))
+        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#101a2a",
+                                   fg=self.TEXT, font=("Segoe UI", 19, "bold"))
+        self.name_label.pack(side="left")
+        tk.Label(header, text="ЛОКАЛЬНЫЙ ИИ-ПОМОЩНИК", bg="#101a2a",
+                 fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left", padx=14)
+        self.status = tk.Label(header, text="●  Запуск...", bg="#101a2a",
+                               fg=self.ACCENT, font=("Segoe UI", 10, "bold"))
+        self.status.pack(side="right", padx=(8, 22))
         self.mic_btn = RoundedButton(
-            right, text="🎙  ВКЛЮЧИТЬ МИКРОФОН", command=self.toggle_listening,
+            header, text="🎙  МИКРОФОН", command=self.toggle_listening,
             bg=self.GREEN, fg="#071522", activebackground="#83ecc8",
-            font=("Segoe UI", 10, "bold"), padx=17, pady=10, radius=14,
-            border="#73e8c1", canvas_bg=self.PANEL,
+            font=("Segoe UI", 9, "bold"), padx=14, pady=8, radius=12,
+            border="#73e8c1", canvas_bg="#101a2a",
         )
-        self.mic_btn.pack(anchor="e", pady=(0, 5))
-        self.status = tk.Label(
-            right, text="●  Запуск...", bg=self.PANEL, fg=self.ACCENT,
-            font=("Segoe UI", 9, "bold"),
-        )
-        self.status.pack(anchor="e")
-        self.mood_label = tk.Label(
-            right, text="🙂  На связи", bg=self.PANEL, fg=self.ACCENT,
-            font=("Segoe UI", 9, "bold"),
-        )
-        self.mood_label.pack(anchor="e", pady=(3, 0))
+        self.mic_btn.pack(side="right", padx=10, pady=8)
 
-        body = tk.Frame(self.root, bg=self.BG, padx=16, pady=8)
-        body.pack(fill="both", expand=True)
+        # Основная трёхколоночная область
+        shell = tk.Frame(self.root, bg=self.BG)
+        shell.pack(fill="both", expand=True)
+        sidebar = tk.Frame(shell, bg="#101a2a", width=238,
+                           highlightthickness=1, highlightbackground=self.BORDER)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+        center = tk.Frame(shell, bg=self.BG)
+        center.pack(side="left", fill="both", expand=True, padx=20, pady=18)
+        rightbar = tk.Frame(shell, bg=self.BG, width=252)
+        rightbar.pack(side="right", fill="y", padx=(0, 18), pady=18)
+        rightbar.pack_propagate(False)
 
-        # Rounded assistant identity card
-        hero = RoundedPanel(
-            body, fill=self.PANEL, background=self.BG, radius=18,
-            padding=9, border=self.BORDER, height=76,
-        )
-        hero.pack(fill="x", pady=(0, 10))
-        self.avatar = tk.Label(
-            hero.content, text="🤖", bg=self.PANEL, fg=self.ACCENT,
-            font=("Segoe UI Emoji", 25),
-        )
-        self.avatar.pack(side="left", padx=(5, 12))
-        hero_text = tk.Frame(hero.content, bg=self.PANEL)
-        hero_text.pack(side="left", fill="y", pady=3)
-        tk.Label(
-            hero_text, text="Твой помощник всегда рядом", bg=self.PANEL,
-            fg=self.TEXT, font=("Segoe UI", 11, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            hero_text, text="Общайся, ищи информацию и создавай программы",
-            bg=self.PANEL, fg=self.MUTED, font=("Segoe UI", 8),
-        ).pack(anchor="w", pady=(3, 0))
+        tk.Label(sidebar, text="◈  ДИМАСИК", bg="#101a2a", fg=self.TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=22, pady=(24, 24))
 
-        # Bottom composer and action bar
-        bottom = tk.Frame(body, bg=self.BG)
-        bottom.pack(side="bottom", fill="x", pady=(10, 0))
-        footer = RoundedPanel(
-            bottom, fill=self.PANEL, background=self.BG, radius=18,
-            padding=10, border=self.BORDER, height=124,
-        )
-        footer.pack(fill="x")
-        controls = tk.Frame(footer.content, bg=self.PANEL)
-        controls.pack(fill="x", pady=(0, 8))
-        entry_shell = RoundedPanel(
-            controls, fill=self.PANEL2, background=self.PANEL, radius=13,
-            padding=5, border="#314565", height=48,
-        )
-        entry_shell.pack(side="left", fill="x", expand=True, padx=(0, 9))
-        self.entry = tk.Entry(
-            entry_shell.content, bg=self.PANEL2, fg=self.TEXT,
-            insertbackground=self.TEXT, relief="flat", bd=0,
-            font=("Segoe UI", 11), highlightthickness=0,
-        )
-        self.entry.pack(fill="both", expand=True, ipady=8, padx=8)
-        self.entry.bind("<Return>", lambda event: self.send_text())
-        self.send_btn = RoundedButton(
-            controls, text="Отправить  ➤", command=self.send_text,
-            bg=self.ACCENT, fg="#0b1425", activebackground="#a2c0ff",
-            font=("Segoe UI", 9, "bold"), padx=17, pady=10, radius=12,
-            border="#93b4ff", canvas_bg=self.PANEL,
-        )
-        self.send_btn.pack(side="left")
+        def nav_button(label, command, active=False, accent=None):
+            color = accent or ("#183b63" if active else "#101a2a")
+            fg = "#ffffff" if active or accent else "#b8c9e2"
+            button = tk.Button(
+                sidebar, text=label, command=command, anchor="w",
+                bg=color, fg=fg, activebackground="#233a5c",
+                activeforeground="#ffffff", relief="flat", bd=0,
+                font=("Segoe UI", 10, "bold" if active or accent else "normal"),
+                padx=18, pady=12, cursor="hand2",
+                highlightthickness=1 if accent else 0,
+                highlightbackground=accent or color,
+            )
+            button.pack(fill="x", padx=12, pady=3)
+            return button
 
-        actions = tk.Frame(footer.content, bg=self.PANEL)
-        actions.pack(fill="x")
-        common_button = {
-            "bg": self.PANEL2,
-            "fg": self.TEXT,
-            "activebackground": "#2a3d5e",
-            "font": ("Segoe UI", 9, "bold"),
-            "padx": 12,
-            "pady": 8,
-            "radius": 11,
-            "border": self.BORDER,
-            "canvas_bg": self.PANEL,
-        }
-        RoundedButton(
-            actions, text="⚙  Настройки", command=self.open_settings,
-            **common_button,
-        ).pack(side="left", padx=(0, 5))
-        self.update_btn = RoundedButton(
-            actions, text="↻  Обновления", command=self.check_updates,
-            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
-        )
-        self.update_btn.pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="⚡  API-генератор", command=self.open_api_generator,
-            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
-        ).pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="⌘  GitHub", command=self.open_github,
-            **common_button,
-        ).pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="✉  Почта", command=self.open_email,
-            **common_button,
-        ).pack(side="left", padx=5)
-        self.coder_btn = RoundedButton(
-            actions,
-            text="✓  Модель ИИ установлена" if CODE_WRITER.model_installed
-                  else "↓  Модель ИИ (≈2,24 ГБ)",
-            command=self.download_coder_model,
-            fg=self.GREEN if CODE_WRITER.model_installed else self.ACCENT,
-            **{k: v for k, v in common_button.items() if k != "fg"},
-        )
-        self.coder_btn.pack(side="left", padx=5)
-        self.image_btn = RoundedButton(
-            actions,
-            text="🖼 Создать картинку" if IMAGE_GENERATOR.model_installed
-                 else "🖼 Модель картинок",
-            command=self.image_action,
-            fg=self.GREEN if IMAGE_GENERATOR.model_installed else self.ACCENT,
-            **{k: v for k, v in common_button.items() if k != "fg"},
-        )
-        self.image_btn.pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="📎  Файл", command=self.attach_file,
-            fg=self.ACCENT, **{k: v for k, v in common_button.items() if k != "fg"},
-        ).pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="🗒  Мои дела", command=self.show_productivity,
-            **common_button,
-        ).pack(side="left", padx=5)
-        RoundedButton(
-            actions, text="Очистить чат", command=self.clear_chat,
-            bg="#202b42", fg=self.MUTED, activebackground="#34445f",
-            font=("Segoe UI", 9), padx=12, pady=8, radius=11,
-            border=self.BORDER, canvas_bg=self.PANEL,
-        ).pack(side="right")
+        nav_button("⌂   Главная", lambda: self.entry.focus_set(), active=True)
+        nav_button("☏   Чат", lambda: self.entry.focus_set())
+        nav_button("♩   Голос", self.toggle_listening)
+        nav_button("⌕   Поиск", lambda: self._quick_prompt("Найди в интернете "))
+        nav_button("▤   Файлы", self.attach_file)
+        nav_button("▧   Генерация изображений", self.image_action)
+        nav_button("⚡   API-генератор", self.open_api_generator, accent="#a34cff")
+        nav_button("⚙   Настройки", self.open_settings)
+        nav_button("⌘   GitHub", self.open_github)
+        nav_button("✉   Почта", self.open_email)
+        tk.Label(sidebar, text="Димасик — твой локальный\nИИ-помощник",
+                 bg="#101a2a", fg=self.MUTED, justify="left",
+                 font=("Segoe UI", 9)).pack(side="bottom", anchor="w", padx=20, pady=22)
 
-        # Chat lives inside a rounded card; text remains selectable/copyable.
+        # Приветствие и карточки возможностей
+        hero = tk.Frame(center, bg=self.BG)
+        hero.pack(fill="x", pady=(0, 18))
+        tk.Label(hero, text="🤖", bg=self.BG, fg=self.ACCENT,
+                 font=("Segoe UI Emoji", 38)).pack(side="left", padx=(4, 16))
+        hero_text = tk.Frame(hero, bg=self.BG)
+        hero_text.pack(side="left", fill="y")
+        tk.Label(hero_text, text="Привет! Я Димасик 👋", bg=self.BG,
+                 fg=self.TEXT, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(hero_text, text="Твой локальный ИИ-помощник. Готов помочь!",
+                 bg=self.BG, fg=self.MUTED, font=("Segoe UI", 12)).pack(anchor="w", pady=(3, 0))
+        self.mood_label = tk.Label(hero, text="🙂  На связи", bg=self.BG,
+                                   fg=self.ACCENT, font=("Segoe UI", 9, "bold"))
+        self.mood_label.pack(side="right", anchor="n", pady=10)
+
+        cards = tk.Frame(center, bg=self.BG)
+        cards.pack(fill="x", pady=(0, 16))
+        for column in range(3):
+            cards.grid_columnconfigure(column, weight=1, uniform="feature")
+
+        def feature_card(row, column, title, description, command, color, api=False):
+            panel_color = "#17243b" if not api else "#211a42"
+            border_color = color if api else self.BORDER
+            panel = RoundedPanel(
+                cards, fill=panel_color, background=self.BG, radius=16,
+                padding=10, border=border_color, height=112,
+            )
+            panel.grid(row=row, column=column, sticky="nsew",
+                       padx=(0 if column == 0 else 7, 7 if column < 2 else 0),
+                       pady=(0, 8))
+            inner = panel.content
+            tk.Label(inner, text=title, bg=panel_color, fg=self.TEXT,
+                     font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            tk.Label(inner, text=description, bg=panel_color, fg=self.MUTED,
+                     font=("Segoe UI", 9), justify="left",
+                     wraplength=220).pack(anchor="w", pady=(4, 7))
+            action = RoundedButton(
+                inner, text="Открыть  →", command=command,
+                bg=color if api else "#243957", fg="#ffffff",
+                activebackground=color, font=("Segoe UI", 8, "bold"),
+                padx=10, pady=5, radius=9, border=border_color,
+                canvas_bg=panel_color,
+            )
+            action.pack(anchor="w")
+
+        feature_card(0, 0, "💬  Чат", "Общайся с Димасиком на любые темы",
+                     lambda: self.entry.focus_set(), "#2686e8")
+        feature_card(0, 1, "🎙  Голос", "Говори и слушай ответы",
+                     self.toggle_listening, "#16b981")
+        feature_card(0, 2, "⌕  Поиск", "Находи информацию в интернете",
+                     lambda: self._quick_prompt("Найди в интернете "), "#8060e8")
+        feature_card(1, 0, "▤  Файлы", "Анализируй документы, тексты и код",
+                     self.attach_file, "#e69a28")
+        feature_card(1, 1, "▧  Изображения", "Создавай картинки по описанию",
+                     self.image_action, "#df4c9b")
+        feature_card(1, 2, "⚡  API-генератор", "Создавай API под свои задачи",
+                     self.open_api_generator, "#a34cff", api=True)
+
+        # Диалоговая область
         chat_card = RoundedPanel(
-            body, fill=self.PANEL, background=self.BG, radius=20,
-            padding=8, border=self.BORDER, height=420,
+            center, fill=self.PANEL, background=self.BG, radius=18,
+            padding=8, border=self.BORDER,
         )
         chat_card.pack(fill="both", expand=True)
+        chat_header = tk.Frame(chat_card.content, bg=self.PANEL)
+        chat_header.pack(fill="x", padx=8, pady=(2, 6))
+        tk.Label(chat_header, text="Диалог", bg=self.PANEL, fg=self.TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side="left")
+        RoundedButton(
+            chat_header, text="Очистить", command=self.clear_chat,
+            bg=self.PANEL2, fg=self.MUTED, activebackground="#34445f",
+            font=("Segoe UI", 8), padx=9, pady=5, radius=8,
+            border=self.BORDER, canvas_bg=self.PANEL,
+        ).pack(side="right")
         self.chat = tk.Text(
             chat_card.content, bg=self.PANEL, fg=self.TEXT,
             insertbackground=self.TEXT, relief="flat", bd=0,
-            wrap="word", padx=14, pady=12, font=("Segoe UI", 10),
+            wrap="word", padx=12, pady=10, font=("Segoe UI", 10),
             state="disabled", spacing1=5, spacing3=8,
             selectbackground="#34527a", selectforeground="#ffffff",
         )
@@ -740,16 +721,71 @@ class DimasikApp:
             font=("Cascadia Code", 9), lmargin1=18, lmargin2=18,
             spacing1=5, spacing3=5,
         )
+
+        composer = RoundedPanel(
+            center, fill=self.PANEL, background=self.BG, radius=15,
+            padding=8, border=self.BORDER, height=58,
+        )
+        composer.pack(fill="x", pady=(12, 0))
+        compose_row = tk.Frame(composer.content, bg=self.PANEL)
+        compose_row.pack(fill="x")
+        self.entry = tk.Entry(
+            compose_row, bg=self.PANEL2, fg=self.TEXT,
+            insertbackground=self.TEXT, relief="flat", bd=0,
+            font=("Segoe UI", 11),
+        )
+        self.entry.pack(side="left", fill="x", expand=True, ipady=9, padx=(4, 10))
+        self.entry.bind("<Return>", lambda event: self.send_text())
+        self.send_btn = RoundedButton(
+            compose_row, text="Отправить  ➤", command=self.send_text,
+            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            font=("Segoe UI", 9, "bold"), padx=14, pady=8, radius=10,
+            border="#93b4ff", canvas_bg=self.PANEL,
+        )
+        self.send_btn.pack(side="right")
+
+        # Правая колонка со статусом и локальными компонентами
+        def info_panel(title, value, detail="", color=None):
+            panel = RoundedPanel(
+                rightbar, fill=self.PANEL, background=self.BG, radius=15,
+                padding=12, border=self.BORDER,
+            )
+            panel.pack(fill="x", pady=(0, 12))
+            tk.Label(panel.content, text=title, bg=self.PANEL, fg=self.MUTED,
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            tk.Label(panel.content, text=value, bg=self.PANEL,
+                     fg=color or self.TEXT, font=("Segoe UI", 12, "bold"),
+                     wraplength=205, justify="left").pack(anchor="w", pady=(7, 2))
+            if detail:
+                tk.Label(panel.content, text=detail, bg=self.PANEL, fg=self.MUTED,
+                         font=("Segoe UI", 8), wraplength=205,
+                         justify="left").pack(anchor="w")
+
+        info_panel("▣  СИСТЕМА", "●  Локальный режим", "Данные остаются на компьютере", self.GREEN)
+        info_panel("♧  МОДЕЛЬ", "Granite 4.2 3B",
+                   "Активна" if CODE_WRITER.model_installed else "Модель можно загрузить в приложении",
+                   self.GREEN if CODE_WRITER.model_installed else self.ACCENT)
+        info_panel("◇  ВОЗМОЖНОСТИ", "Чат  •  Голос  •  Поиск",
+                   "Файлы  •  Изображения  •  API-генератор")
+        info_panel("▤  ПАМЯТЬ", "Локальная", "История и рабочие данные хранятся на этом компьютере")
+        info_panel("⚡  API", "API-генератор",
+                   "Создавай специализированный API под собственную задачу", "#c49aff")
+        tk.Label(
+            self.root,
+            text="Димасик  •  Vosk  •  DimaCore 2.0  •  Granite  •  Stable Diffusion",
+            bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
+        ).pack()
+
         self._append(
             "СИСТЕМА",
             "Привет! Я Димасик. Напиши сообщение или включи микрофон.",
             "system",
         )
-        tk.Label(
-            self.root,
-            text="Локальный помощник  •  Vosk  •  DimaCore 2.0  •  Granite  •  Stable Diffusion",
-            bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
-        ).pack()
+
+    def _quick_prompt(self, prefix):
+        self.entry.delete(0, "end")
+        self.entry.insert(0, prefix)
+        self.entry.focus_set()
 
     def _submit_prompt(self, prompt, visible_text=None):
         display = visible_text if visible_text is not None else prompt
