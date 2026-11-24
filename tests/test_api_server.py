@@ -26,10 +26,16 @@ class ApiKeyTests(unittest.TestCase):
     def test_key_is_only_stored_as_hash_and_can_be_revoked(self):
         token = api_server.create_key("unit-test", rpm=7)
         digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        with sqlite3.connect(self.db_path) as conn:
+        conn = sqlite3.connect(self.db_path)
+        try:
             rows = conn.execute(
                 "SELECT prefix, secret_hash, rpm FROM api_keys"
             ).fetchall()
+        finally:
+            # sqlite3.Connection as a context manager commits/rolls back,
+            # but does not close the connection. Close it before TemporaryDirectory cleanup
+            # because Windows does not allow deleting an open SQLite database.
+            conn.close()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][1], digest)
         self.assertNotEqual(rows[0][1], token)
