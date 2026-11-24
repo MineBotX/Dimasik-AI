@@ -37,6 +37,16 @@ class ApiKeyTests(unittest.TestCase):
         self.assertTrue(api_server.revoke_key(rows[0][0]))
         self.assertFalse(api_server.revoke_key(rows[0][0]))
 
+    def test_task_profile_is_saved_and_loaded(self):
+        profile_path = Path(self.temp_dir.name) / "api_profile.json"
+        with patch.object(api_server, "PROFILE_PATH", profile_path):
+            api_server.save_profile("Reviews", "Analyze customer reviews", "You classify reviews.")
+            self.assertEqual(api_server.load_profile(), {
+                "task_prompt": "You classify reviews.", "name": "Reviews"
+            })
+            with self.assertRaises(ValueError):
+                api_server.save_profile("bad", "purpose", "x" * 12001)
+
     def test_invalid_key_parameters_are_rejected(self):
         with self.assertRaises(ValueError):
             api_server.create_key(" ", rpm=10)
