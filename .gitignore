@@ -2,3 +2,7 @@ __pycache__/
 .venv/
 models/
 *.log
+brain/api_keys.sqlite3
+
+brain/api_profile.json
+brain/api_profile.tmp

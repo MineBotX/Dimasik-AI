@@ -1,0 +1,6 @@
+# Replace api.example.com with a domain whose DNS A/AAAA records point to this server.
+# Keep Dimasik API bound to 127.0.0.1:8787; expose only Caddy's HTTPS port.
+api.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8787
+}
