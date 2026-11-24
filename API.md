@@ -54,7 +54,7 @@ OpenAI-compatible routes:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 
-The API accepts `user`, `assistant`, and `system` messages. Caller-provided system messages are ignored so a client cannot replace Dimasik's built-in instructions. Streaming, tools/function calling, image input, and exact token accounting are not implemented yet. `usage` fields are returned as zero placeholders.
+The API accepts `user`, `assistant`, and `system` messages. Caller-provided system messages are ignored so a client cannot replace Dimasik's built-in instructions. Requests must use `Content-Type: application/json`, a fixed `Content-Length`, `model: "dimasik"`, and `stream: false`. Streaming, tools/function calling, image input, and exact token accounting are not implemented yet. `usage` fields are returned as zero placeholders. `max_tokens` must be a positive integer and is capped at 2048.
 
 ## Remote deployment and security
 
@@ -66,4 +66,4 @@ Example Caddy setup:
 3. Allow inbound TCP 80 and 443 in the host firewall; do not expose port 8787 or the llama.cpp model port.
 4. Start Dimasik with `python -m assistant.api_server serve --host 127.0.0.1 --port 8787` and reload Caddy. Caddy obtains and renews the TLS certificate automatically.
 
-A non-loopback bind is intentionally disabled by default. Only consider `DIMASIK_ALLOW_REMOTE_BIND=1` for a separately secured network architecture; it is not needed for the reverse-proxy setup. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments.
+A non-loopback bind is intentionally disabled by default. Only consider `DIMASIK_ALLOW_REMOTE_BIND=1` for a separately secured network architecture; it is not needed for the reverse-proxy setup. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments. Because the local Granite instance handles one generation at a time, the API admits only one inference at once and returns HTTP 503 (`model_busy`, `Retry-After: 5`) when it is occupied. Clients should retry with backoff rather than opening many simultaneous requests.
