@@ -28,6 +28,7 @@ from assistant.local_coder import LocalCoder
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "brain" / "api_keys.sqlite3"
+PROFILE_PATH = ROOT / "brain" / "api_profile.json"
 MAX_BODY = 64 * 1024
 DEFAULT_RPM = 30
 MODEL_ID = "dimasik"
@@ -46,6 +47,32 @@ def _connection():
         conn.commit()
     finally:
         conn.close()
+
+
+def save_profile(name: str, purpose: str, task_prompt: str, model: str = MODEL_ID) -> None:
+    """Persist a task-specific system prompt locally."""
+    if model != MODEL_ID:
+        raise ValueError("Поддерживается только Granite через dimasik.")
+    name, purpose, task_prompt = str(name).strip()[:80], str(purpose).strip(), str(task_prompt).strip()
+    if not purpose or len(purpose) > 4000 or not task_prompt or len(task_prompt) > 12000:
+        raise ValueError("Описание задачи или системный промт пусты либо слишком длинные.")
+    PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = PROFILE_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"name": name or "Мой API", "purpose": purpose,
+        "task_prompt": task_prompt, "model": MODEL_ID}, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(PROFILE_PATH)
+
+
+def load_profile() -> dict:
+    try:
+        data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("model") == MODEL_ID:
+            prompt = data.get("task_prompt")
+            if isinstance(prompt, str) and prompt.strip():
+                return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80]}
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    return {"task_prompt": "", "name": "Димасик"}
 
 
 def _db() -> sqlite3.Connection:
@@ -263,8 +290,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         started = time.monotonic()
         try:
+            profile = load_profile()
             answer = _coder.generate_chat(
-                last_user, conversation=history, max_tokens=max_tokens
+                last_user, conversation=history, max_tokens=max_tokens,
+                task_prompt=profile["task_prompt"],
             )
         except Exception as exc:
             self.log_error("Model request failed: %s", type(exc).__name__)
@@ -289,7 +318,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         sys.stderr.write("[DimasikAPI] ERROR " + (fmt % args) + "\n")
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787):
+def start_server(host: str = "127.0.0.1", port: int = 8787):
     if not 1 <= int(port) <= 65535:
         raise ValueError("Port must be between 1 and 65535.")
     if host not in ("127.0.0.1", "localhost", "::1") and os.environ.get(
@@ -301,6 +330,11 @@ def serve(host: str = "127.0.0.1", port: int = 8787):
         )
     server = ThreadingHTTPServer((host, int(port)), ApiHandler)
     server.daemon_threads = True
+    return server
+
+
+def serve(host: str = "127.0.0.1", port: int = 8787):
+    server = start_server(host, port)
     print(f"Dimasik API listening on http://{host}:{port}")
     print("Use HTTPS via a trusted reverse proxy before exposing it outside this computer.")
     try:
