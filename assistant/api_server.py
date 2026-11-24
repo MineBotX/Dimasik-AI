@@ -34,6 +34,8 @@ MODEL_ID = "dimasik"
 _coder = LocalCoder(ROOT)
 _rate_lock = threading.Lock()
 _rate_events: dict[str, list[float]] = {}
+# A single local Granite instance: reject excess work rather than queueing HTTP threads.
+_inference_slot = threading.BoundedSemaphore(1)
 
 
 @contextmanager
@@ -84,7 +86,7 @@ def create_key(name: str, rpm: int = DEFAULT_RPM) -> str:
 
 
 def revoke_key(prefix: str) -> bool:
-    with _db() as conn:
+    with _connection() as conn:
         cur = conn.execute(
             "UPDATE api_keys SET active=0 WHERE prefix=? AND active=1", (prefix,)
         )
@@ -97,7 +99,7 @@ def _authenticate(handler):
     if scheme.lower() != "bearer" or not token.startswith("dm_live_"):
         return None
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    with _db() as conn:
+    with _connection() as conn:
         row = conn.execute(
             "SELECT id, prefix, rpm FROM api_keys WHERE active=1 AND secret_hash=?",
             (digest,),
@@ -107,7 +109,6 @@ def _authenticate(handler):
                 "UPDATE api_keys SET last_used_at=CURRENT_TIMESTAMP WHERE id=?",
                 (row["id"],),
             )
-            conn.commit()
     if row is None:
         return None
     return dict(row)
@@ -190,6 +191,13 @@ class ApiHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._error(400, "Invalid Content-Length.", "invalid_request")
             return
+        if self.headers.get("Transfer-Encoding"):
+            self._error(400, "Transfer-Encoding is not supported; send Content-Length.", "invalid_request")
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            self._error(415, "Content-Type must be application/json.", "unsupported_media_type")
+            return
         if length < 1 or length > MAX_BODY:
             self._error(413, "Request body must be between 1 byte and 64 KiB.",
                         "request_too_large")
@@ -201,6 +209,12 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         if not isinstance(payload, dict):
             self._error(400, "JSON body must be an object.", "invalid_request")
+            return
+        if payload.get("stream", False) is not False:
+            self._error(400, "Streaming is not supported; set stream=false.", "unsupported_parameter")
+            return
+        if payload.get("model", MODEL_ID) != MODEL_ID:
+            self._error(404, "Unknown model. Use model=\"dimasik\".", "model_not_found")
             return
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages or len(messages) > 20:
@@ -233,13 +247,20 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._error(400, "The final message must be a non-empty user message.",
                         "invalid_messages")
             return
+        raw_max_tokens = payload.get("max_tokens", 512)
+        if isinstance(raw_max_tokens, bool) or not isinstance(raw_max_tokens, int) or raw_max_tokens < 1:
+            self._error(400, "max_tokens must be a positive integer.", "invalid_max_tokens")
+            return
         try:
-            max_tokens = int(payload.get("max_tokens", 512))
+            max_tokens = int(raw_max_tokens)
         except (TypeError, ValueError):
             self._error(400, "max_tokens must be an integer.", "invalid_max_tokens")
             return
         max_tokens = max(64, min(2048, max_tokens))
         history = conversation[:-1][-8:]
+        if not _inference_slot.acquire(blocking=False):
+            self._send(503, {"error": {"message": "The local model is busy. Retry shortly.", "type": "server_busy", "code": "model_busy"}}, {"Retry-After": "5"})
+            return
         started = time.monotonic()
         try:
             answer = _coder.generate_chat(
@@ -250,6 +271,8 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._error(503, "Dimasik's local model is unavailable. Check that Granite is installed.",
                         "model_unavailable")
             return
+        finally:
+            _inference_slot.release()
         elapsed = int((time.monotonic() - started) * 1000)
         self._send(200, {
             "id": "chatcmpl-" + uuid.uuid4().hex,
