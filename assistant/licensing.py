@@ -20,7 +20,7 @@ def device_id() -> str:
     if platform.system() == "Windows":
         try:
             import winreg
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\\Microsoft\\Cryptography") as key:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography") as key:
                 value = str(winreg.QueryValueEx(key, "MachineGuid")[0])
         except OSError:
             pass
