@@ -32,6 +32,7 @@ from modern_widgets import RoundedButton, RoundedPanel
 from image_generator import LocalImageGenerator, is_image_request
 from productivity import ProductivityStore
 from file_reader import read_document, SUPPORTED_EXTENSIONS
+from licensing import LicenseError, activate_license, create_transfer_request, current_license, device_id, feature_allowed
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config.json"
@@ -253,6 +254,9 @@ def ask_local_ai(prompt):
         KNOWLEDGE.remember(prompt, productivity_answer, source="local-tool")
         return productivity_answer
 
+    if is_code_request(normalized) and not feature_allowed("code"):
+        return "Написание кода доступно в тарифе Pro или Ultimate. Открой «Лицензия и тариф», чтобы активировать лицензию."
+
     # Generate original code with the local Granite model, not templates.
     if is_code_request(normalized):
         try:
@@ -262,6 +266,9 @@ def ask_local_ai(prompt):
         history.append({"role": "assistant", "content": answer})
         KNOWLEDGE.remember(prompt, answer, source="conversation")
         return answer
+
+    if is_image_request(normalized) and not feature_allowed("image"):
+        return "Генерация изображений доступна в тарифе Ultimate. Открой «Лицензия и тариф»."
 
     # Generate images completely offline after the local model is installed.
     if is_image_request(normalized):
@@ -357,7 +364,7 @@ def ask_local_ai(prompt):
         history.append({"role": "assistant", "content": answer})
         return answer
 
-    if CODE_WRITER.model_installed:
+    if CODE_WRITER.model_installed and feature_allowed("granite"):
         try:
             answer = CODE_WRITER.generate_chat(
                 normalized,
@@ -623,6 +630,7 @@ class DimasikApp:
         nav_button("▤   Файлы", self.attach_file)
         nav_button("▧   Генерация изображений", self.image_action)
         nav_button("⚡   API-генератор", self.open_api_generator, accent="#087e9e")
+        nav_button("♙   Лицензия и тариф", self.open_license_window)
         nav_button("⚙   Настройки", self.open_settings)
         nav_button("⌘   GitHub", self.open_github)
         nav_button("✉   Почта", self.open_email)
@@ -825,6 +833,9 @@ class DimasikApp:
         threading.Thread(target=self._answer_text, args=(prompt,), daemon=True).start()
 
     def open_api_generator(self):
+        if not feature_allowed("api"):
+            messagebox.showinfo("Требуется Ultimate", "API-генератор доступен только в тарифе Ultimate.")
+            return
         win = tk.Toplevel(self.root)
         win.title("API-генератор — Димасик")
         win.geometry("740x650")
@@ -943,6 +954,9 @@ class DimasikApp:
         create_btn.pack(anchor="w", padx=20, pady=(5, 16))
 
     def attach_file(self):
+        if not feature_allowed("files"):
+            messagebox.showinfo("Требуется Pro", "Анализ документов доступен в тарифах Pro и Ultimate.")
+            return
         if not CODE_WRITER.model_installed:
             messagebox.showinfo(
                 "Анализ файлов",
@@ -1024,6 +1038,9 @@ class DimasikApp:
             self.root.after(15000, self.check_reminders)
 
     def image_action(self):
+        if not feature_allowed("image"):
+            messagebox.showinfo("Требуется Ultimate", "Генерация изображений доступна только в тарифе Ultimate.")
+            return
         if not IMAGE_GENERATOR.model_installed:
             self.download_image_model()
             return
@@ -1127,6 +1144,9 @@ class DimasikApp:
             webbrowser.open(Path(image_path).resolve().as_uri())
 
     def download_coder_model(self):
+        if not feature_allowed("granite"):
+            messagebox.showinfo("Требуется Pro", "Загрузка Granite и расширенный диалог доступны в тарифах Pro и Ultimate.")
+            return
         if CODE_WRITER.model_installed:
             messagebox.showinfo("Модель ИИ", "Модель Granite уже установлена. Она отвечает на вопросы и пишет код.")
             return
@@ -1340,6 +1360,61 @@ class DimasikApp:
                 break
         self.root.after(0, lambda: self.mic_btn.configure(text="▶  Включить микрофон"))
 
+
+    def open_license_window(self):
+        win = tk.Toplevel(self.root)
+        win.title("Лицензия Димасика")
+        win.geometry("620x430")
+        win.configure(bg=self.BG)
+        license_data = current_license()
+        plan = str(license_data.get("plan", "free")).upper()
+        expiry = license_data.get("expires_at")
+        expiry_text = datetime.fromtimestamp(expiry).strftime("%d.%m.%Y %H:%M") if isinstance(expiry, int) else "без срока"
+        tk.Label(win, text="Лицензия и подписка", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 19, "bold")).pack(anchor="w", padx=20, pady=(18, 8))
+        tk.Label(win, text=f"Текущий тариф: {plan}  •  {expiry_text}",
+                 bg=self.BG, fg=self.GREEN, font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=20, pady=6)
+        tk.Label(win, text="ID этого компьютера (для выпуска или переноса лицензии):",
+                 bg=self.BG, fg=self.MUTED).pack(anchor="w", padx=20, pady=(12, 4))
+        device_box = tk.Entry(win, bg=self.PANEL, fg=self.TEXT, relief="flat")
+        device_box.pack(fill="x", padx=20, ipady=8)
+        device_box.insert(0, device_id())
+        device_box.configure(state="readonly")
+        actions = tk.Frame(win, bg=self.BG)
+        actions.pack(fill="x", padx=20, pady=12)
+        def copy_device():
+            win.clipboard_clear()
+            win.clipboard_append(device_id())
+            messagebox.showinfo("ID устройства", "ID скопирован.", parent=win)
+        tk.Button(actions, text="Скопировать ID", command=copy_device,
+                  bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=8).pack(side="left")
+        def import_license():
+            path = filedialog.askopenfilename(parent=win, title="Выбери файл лицензии",
+                filetypes=[("Лицензия Dimasik", "*.dimalic"), ("Все файлы", "*.*")])
+            if not path:
+                return
+            try:
+                data = activate_license(path)
+                messagebox.showinfo("Лицензия", "Лицензия активирована. Тариф: " + str(data.get("plan", "")).upper(), parent=win)
+                win.destroy()
+                self.open_license_window()
+            except LicenseError as exc:
+                messagebox.showerror("Лицензия", str(exc), parent=win)
+        tk.Button(actions, text="Активировать .dimalic", command=import_license,
+                  bg=self.ACCENT, fg="#ffffff", relief="flat", padx=12, pady=8).pack(side="left", padx=8)
+        def export_transfer():
+            path = filedialog.asksaveasfilename(parent=win, title="Сохранить запрос переноса",
+                defaultextension=".dimareq", filetypes=[("Запрос переноса", "*.dimareq")])
+            if path:
+                try:
+                    create_transfer_request(path)
+                    messagebox.showinfo("Перенос лицензии", "Запрос сохранён. Отправь файл администратору лицензий.", parent=win)
+                except Exception as exc:
+                    messagebox.showerror("Перенос лицензии", str(exc), parent=win)
+        tk.Button(win, text="Создать запрос переноса на этот ПК", command=export_transfer,
+                  bg=self.PANEL2, fg=self.TEXT, relief="flat", padx=12, pady=8).pack(anchor="w", padx=20, pady=4)
+        tk.Label(win, text="Free: базовый чат и инструменты\nPro: Granite, программирование и анализ файлов\nUltimate: всё из Pro, генерация изображений и API",
+                 bg=self.PANEL, fg=self.MUTED, justify="left", padx=12, pady=10).pack(fill="x", padx=20, pady=14)
 
     def open_github(self):
         win = tk.Toplevel(self.root)
