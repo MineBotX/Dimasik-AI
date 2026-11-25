@@ -60,6 +60,18 @@ class ApiKeyTests(unittest.TestCase):
             api_server.create_key("valid", rpm=0)
 
 
+class CorsTests(unittest.TestCase):
+    def test_only_local_crosshair_origins_are_allowed(self):
+        handler = object.__new__(api_server.ApiHandler)
+        handler.headers = {"Origin": "http://localhost:5500"}
+        self.assertEqual(handler._cors_headers()["Access-Control-Allow-Origin"], "http://localhost:5500")
+        handler.headers = {"Origin": "http://127.0.0.1:5500"}
+        self.assertEqual(handler._cors_headers()["Access-Control-Allow-Origin"], "http://127.0.0.1:5500")
+        for origin in ("null", "https://example.com", "http://localhost:8000"):
+            handler.headers = {"Origin": origin}
+            self.assertEqual(handler._cors_headers(), {})
+
+
 class AdmissionControlTests(unittest.TestCase):
     def setUp(self):
         with api_server._rate_lock:
