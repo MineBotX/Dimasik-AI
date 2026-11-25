@@ -1,73 +1,213 @@
-# Dimasik API (OpenAI-compatible)
+# API Димасика — документация на русском
 
-Dimasik exposes the locally installed Granite model through an authenticated HTTP API. The desktop app includes an API Generator that turns a task description into a task-specific system prompt and stores it locally. The API applies that prompt to every chat request.
+Локальный HTTP API Димасика совместим с форматом **OpenAI Chat Completions**. Он принимает сообщения чата и возвращает ответ выбранной локальной модели.
 
-## Requirements
+> По умолчанию сервер доступен только на этом компьютере: `http://127.0.0.1:8787`. Не публикуйте порт напрямую в интернете.
 
-- Python environment and dependencies from `requirements.txt`
-- Dimasik's local Granite GGUF model and `llama-server.exe` installed through the desktop app
+## 1. Требования
 
-## Task-specific API Generator
+- Python 3.12 и зависимости из `requirements.txt`.
+- Для Granite — установленная через приложение модель IBM Granite 4.2 3B GGUF и локальный `llama-server.exe`.
+- Для DimaCore — обученное ядро `brain/dimasik_brain.npz`.
 
-In the Dimasik desktop app, open **API-генератор**, describe the API's purpose, and select Granite 4.2 3B. Dimasik uses the local Granite model to draft a system prompt defining the API role, input expectations, workflow, output format, and limitations. The generated prompt is saved in `brain/api_profile.json` and applied server-side to every request; client-supplied `system` messages remain ignored. The generator starts the authenticated API on `127.0.0.1:8787` and shows the newly created key once. The key is stored only as a hash. Keep the API bound to this computer unless you deliberately configure a protected remote deployment. DimaCore is not offered because it is an experimental compact model and is not suitable for arbitrary task-specific API behavior.
+Granite можно загрузить через интерфейс Димасика. Размер модели — около 2,24 ГБ.
 
-## Create a key
+## 2. Режимы модели
 
-From the repository root:
+В поле `model` поддерживаются следующие значения:
+
+| Значение | Поведение |
+|---|---|
+| `auto` | Автоматически выбирает DimaCore для простых коротких запросов и Granite для сложных или длинных |
+| `dimacore` | Принудительно использует экспериментальное ядро DimaCore 2.0 |
+| `granite` | Принудительно использует IBM Granite 4.2 3B |
+| `dimasik` | Псевдоним автоматического режима |
+| `all` | Псевдоним автоматического режима |
+
+Если поле `model` не передано, используется режим, сохранённый в профиле API; если он не задан — `auto`.
+
+Автоматический выбор основан на эвристиках: длине запроса, количестве вопросов и ключевых словах вроде «проанализируй», «напиши код», «составь план». Это не отдельная модель-классификатор. Если DimaCore не загружен, режим `auto` переключается на Granite. При принудительном выборе `dimacore` отсутствие обученного файла приведёт к ошибке доступности модели.
+
+## 3. Генератор API в приложении
+
+1. Откройте раздел **«API-генератор»** в Димасике.
+2. Опишите назначение будущего API.
+3. Выберите режим модели.
+4. Создайте профиль и ключ доступа.
+
+Системная инструкция профиля сохраняется локально в `brain/api_profile.json` и применяется на стороне сервера. Переданные клиентом сообщения с ролью `system` игнорируются: клиент не может заменить встроенные инструкции Димасика.
+
+## 4. Создание ключа
+
+В корне репозитория выполните:
 
 ```powershell
-python -m assistant.api_server create-key --name "Crosshair Service" --rpm 30
+python -m assistant.api_server create-key --name "Мой сервис" --rpm 30
 ```
 
-The full `dm_live_...` token is displayed only once. Store it in the service's backend secret store / environment variables. Never put it in browser JavaScript, a desktop client, a public repository, or a URL.
+- `--name` — название ключа (от 1 до 80 символов).
+- `--rpm` — лимит запросов в минуту (от 1 до 600; по умолчанию 30).
 
-To revoke a key, use the visible prefix (first 16 characters):
+Полный ключ вида `dm_live_...` показывается только один раз. Сохраните его в защищённом хранилище или переменной окружения. Не помещайте ключ в браузерный JavaScript, публичный репозиторий или URL.
+
+Ключи хранятся в `brain/api_keys.sqlite3` только как SHA-256-хеши. Исходный секрет в базе не сохраняется.
+
+### Отзыв ключа
+
+Используйте префикс ключа (первые 16 символов):
 
 ```powershell
 python -m assistant.api_server revoke-key --prefix dm_live_xxxxx
 ```
 
-Keys are stored as SHA-256 hashes in `brain/api_keys.sqlite3`; the raw key is not stored. Each key has its own requests-per-minute limit (default 30, configurable up to 600 when creating it).
-
-## Start the API
+## 5. Запуск сервера
 
 ```powershell
 python -m assistant.api_server serve
 ```
 
-Default address: `http://127.0.0.1:8787`. The server is loopback-only by default. The health endpoint is public; model and chat endpoints require a key.
+Адрес по умолчанию: `127.0.0.1:8787`. Можно указать адрес и порт явно:
 
 ```powershell
-curl http://127.0.0.1:8787/health
+python -m assistant.api_server serve --host 127.0.0.1 --port 8787
 ```
 
-## Chat request
+Переменные окружения `DIMASIK_API_HOST` и `DIMASIK_API_PORT` задают значения по умолчанию.
+
+## 6. Проверка состояния
+
+Маршрут `GET /health` общедоступен и не требует ключа:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8787/health"
+```
+
+Пример ответа:
+
+```json
+{
+  "status": "ok",
+  "service": "dimasik-api"
+}
+```
+
+## 7. Список моделей
+
+Маршрут `GET /v1/models` требует ключ доступа:
 
 ```powershell
 $headers = @{ Authorization = "Bearer $env:DIMASIK_API_KEY" }
-$body = @{
-  model = "dimasik"
-  messages = @(@{ role = "user"; content = "Привет, Димасик!" })
-  max_tokens = 512
-} | ConvertTo-Json -Depth 8
-
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8787/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($body))
+Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/models" -Headers $headers
 ```
 
-OpenAI-compatible routes:
-- `GET /v1/models`
-- `POST /v1/chat/completions`
+Сервер возвращает идентификаторы `dimacore`, `granite`, `all` и `dimasik`. В новых интеграциях используйте `auto`, `dimacore` или `granite` в запросах чата.
 
-The API accepts `user`, `assistant`, and `system` messages. Caller-provided system messages are ignored so a client cannot replace Dimasik's built-in instructions. Requests must use `Content-Type: application/json`, a fixed `Content-Length`, `model: "dimasik"`, and `stream: false`. Streaming, tools/function calling, image input, and exact token accounting are not implemented yet. `usage` fields are returned as zero placeholders. `max_tokens` must be a positive integer and is capped at 2048.
+## 8. Запрос на генерацию ответа
 
-## Remote deployment and security
+Маршрут: `POST /v1/chat/completions`.
 
-Do not expose this plain HTTP server directly to the public internet. For a remote service, run Dimasik on a trusted host and keep it bound to loopback. Put Caddy or nginx on the same host to terminate HTTPS and proxy requests to `127.0.0.1:8787`.
+Пример для PowerShell:
 
-Example Caddy setup:
-1. Point a DNS A/AAAA record for your domain to the server.
-2. Install Caddy on that host and copy `deploy/Caddyfile.example` to its Caddy configuration, replacing `api.example.com` with your domain.
-3. Allow inbound TCP 80 and 443 in the host firewall; do not expose port 8787 or the llama.cpp model port.
-4. Start Dimasik with `python -m assistant.api_server serve --host 127.0.0.1 --port 8787` and reload Caddy. Caddy obtains and renews the TLS certificate automatically.
+```powershell
+$headers = @{
+  Authorization = "Bearer $env:DIMASIK_API_KEY"
+}
+$body = @{
+  model = "auto"
+  messages = @(
+    @{ role = "user"; content = "Привет, Димасик!" }
+  )
+  max_tokens = 512
+  stream = $false
+} | ConvertTo-Json -Depth 8
 
-A non-loopback bind is intentionally disabled by default. Only consider `DIMASIK_ALLOW_REMOTE_BIND=1` for a separately secured network architecture; it is not needed for the reverse-proxy setup. Do not publish the llama.cpp server port. Restrict proxy access, use firewall rules, rotate/revoke keys if exposed, and back up the key database securely. The API currently uses in-memory per-key rate limiting; use a single API process or an external gateway for multi-worker deployments. Because the local Granite instance handles one generation at a time, the API admits only one inference at once and returns HTTP 503 (`model_busy`, `Retry-After: 5`) when it is occupied. Clients should retry with backoff rather than opening many simultaneous requests.
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8787/v1/chat/completions" `
+  -Headers $headers `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([Text.Encoding]::UTF8.GetBytes($body))
+```
+
+Пример JSON:
+
+```json
+{
+  "model": "auto",
+  "messages": [
+    {"role": "user", "content": "Объясни, что такое API простыми словами."}
+  ],
+  "max_tokens": 512,
+  "stream": false
+}
+```
+
+### Параметры запроса
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `model` | строка | `auto`, `dimacore`, `granite`, `dimasik` или `all`. Если не указано — профиль или `auto` |
+| `messages` | массив | От 1 до 20 объектов сообщений |
+| `messages[].role` | строка | `user`, `assistant` или `system` |
+| `messages[].content` | строка | Текст сообщения, максимум 24 000 символов |
+| `max_tokens` | целое | Положительное число; сервер ограничивает его диапазоном 64–2048, по умолчанию 512 |
+| `stream` | логическое | Только `false`; потоковая выдача не поддерживается |
+
+Последнее сообщение должно иметь роль `user` и непустой текст. Сообщения `system`, присланные клиентом, игнорируются. Сервер использует собственные инструкции и профиль API.
+
+### Формат ответа
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "created": 0,
+  "model": "dimacore",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Привет! Чем помочь?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  },
+  "dimasik": {
+    "latency_ms": 120
+  }
+}
+```
+
+Поле `model` показывает, какая модель фактически обработала запрос. Значения `usage` пока являются нулевыми заглушками и не отражают реальный расход токенов.
+
+## 9. Ограничения и ошибки
+
+- Максимальный размер тела запроса — 64 КиБ.
+- Потоковая выдача (`stream=true`), инструменты/function calling и изображения не поддерживаются.
+- Сервер обрабатывает только одну генерацию одновременно. Если модель занята, вернётся HTTP 503 с кодом `model_busy` и заголовком `Retry-After: 5`.
+- При превышении лимита запросов вернётся HTTP 429 и `Retry-After: 60`.
+- При отсутствии или неверном ключе вернётся HTTP 401.
+- При неизвестной модели вернётся HTTP 404.
+- Если локальная модель недоступна, вернётся HTTP 503 с кодом `model_unavailable`.
+
+Рекомендуется повторять запросы после 429 и 503 с увеличивающейся задержкой.
+
+## 10. Удалённый доступ и безопасность
+
+Не выставляйте обычный HTTP API напрямую в интернет.
+
+Для удалённого доступа:
+1. Запустите Димасик на доверенном компьютере, оставив API на `127.0.0.1`.
+2. Настройте на том же компьютере Caddy или nginx как HTTPS reverse proxy.
+3. Откройте извне только HTTPS (обычно порт 443) и, если требуется для сертификата, HTTP (80).
+4. Не публикуйте порт API `8787` и порт локального сервера llama.cpp.
+5. Храните ключи в защищённом месте и отзывайте их при утечке.
+
+Пример конфигурации Caddy находится в `deploy/Caddyfile.example`. Привязка к нелокальному адресу запрещена по умолчанию. Переменная `DIMASIK_ALLOW_REMOTE_BIND=1` снимает это ограничение, но использовать её следует только в отдельно защищённой сетевой архитектуре; для reverse proxy она не нужна.
+
+Ограничение частоты запросов хранится в памяти процесса. Для нескольких рабочих процессов используйте один процесс API или внешний шлюз с общим лимитированием.
