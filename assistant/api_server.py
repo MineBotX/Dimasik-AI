@@ -273,9 +273,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         if payload.get("stream", False) is not False:
             self._error(400, "Streaming is not supported; set stream=false.", "unsupported_parameter")
             return
-        requested_model = str(payload.get("model", MODEL_ID)).lower()
-        selected_model = MODEL_ALIASES.get(requested_model)
-        if selected_model is None:
+        requested_model = str(payload.get("model", "")).lower()
+        selected_model = MODEL_ALIASES.get(requested_model) if requested_model else None
+        if requested_model and selected_model is None:
             self._error(404, "Unknown model. Use dimacore, granite, all, or dimasik.", "model_not_found")
             return
         messages = payload.get("messages")
@@ -326,7 +326,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         started = time.monotonic()
         try:
             profile = load_profile()
-            mode = selected_model or profile.get("model", "all")
+            mode = selected_model or profile.get("model", "auto")
             task_prompt = profile["task_prompt"]
             if mode == "auto":
                 mode = "granite" if _is_complex_request(last_user) else "dimacore"
