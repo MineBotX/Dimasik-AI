@@ -569,12 +569,12 @@ class DimasikApp:
         header.pack_propagate(False)
         tk.Label(header, text="◉", bg=self.PANEL, fg=self.ACCENT,
                  font=("Segoe UI", 25, "bold")).pack(side="left", padx=(20, 10))
-        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#ffffff",
+        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg=self.PANEL,
                                    fg=self.TEXT, font=("Segoe UI", 19, "bold"))
         self.name_label.pack(side="left")
-        tk.Label(header, text="ЛОКАЛЬНЫЙ ИИ-ПОМОЩНИК", bg="#ffffff",
+        tk.Label(header, text="ЛОКАЛЬНЫЙ ИИ-ПОМОЩНИК", bg=self.PANEL,
                  fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left", padx=14)
-        self.status = tk.Label(header, text="●  ЗАПУСК СИСТЕМЫ...", bg="#ffffff",
+        self.status = tk.Label(header, text="●  ЗАПУСК СИСТЕМЫ...", bg=self.PANEL,
                                fg=self.ACCENT, font=("Segoe UI", 10, "bold"))
         self.status.pack(side="right", padx=(8, 22))
         self.mic_btn = RoundedButton(
@@ -602,12 +602,12 @@ class DimasikApp:
                  font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=22, pady=(24, 24))
 
         def nav_button(label, command, active=False, accent=None):
-            color = accent or ("#12364a" if active else "#071626")
-            fg = "#ffffff" if active or accent else "#b8c9e2"
+            color = accent or ("#24436c" if active else self.PANEL2)
+            fg = "#ffffff" if active or accent else self.TEXT
             button = tk.Button(
                 sidebar, text=label, command=command, anchor="w",
-                bg=color, fg=fg, activebackground="#edf1f7",
-                activeforeground="#20242b", relief="flat", bd=0,
+                bg=color, fg=fg, activebackground=self.PANEL2,
+                activeforeground=self.TEXT, relief="flat", bd=0,
                 font=("Segoe UI", 10, "bold" if active or accent else "normal"),
                 padx=18, pady=12, cursor="hand2",
                 highlightthickness=1 if accent else 0,
