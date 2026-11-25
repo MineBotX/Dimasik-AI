@@ -57,10 +57,11 @@ def _connection():
         conn.close()
 
 
-def save_profile(name: str, purpose: str, task_prompt: str, model: str = "all") -> None:
+def save_profile(name: str, purpose: str, task_prompt: str, model: str = "auto") -> None:
     """Persist a task-specific system prompt and inference mode locally."""
-    if model not in MODEL_ALIASES.values():
+    if model not in MODEL_ALIASES and model not in MODEL_ALIASES.values():
         raise ValueError("Неизвестный режим модели API.")
+    model = MODEL_ALIASES.get(model, model)
     name, purpose, task_prompt = str(name).strip()[:80], str(purpose).strip(), str(task_prompt).strip()
     if not purpose or len(purpose) > 4000 or not task_prompt or len(task_prompt) > 12000:
         raise ValueError("Описание задачи или системный промт пусты либо слишком длинные.")
@@ -78,10 +79,10 @@ def load_profile() -> dict:
             prompt = data.get("task_prompt")
             if isinstance(prompt, str) and prompt.strip():
                 return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80],
-                        "model": data["model"]}
+                        **({"model": data["model"]} if data.get("model") else {})}
     except (OSError, ValueError, json.JSONDecodeError):
         pass
-    return {"task_prompt": "", "name": "Димасик", "model": "auto"}
+    return {"task_prompt": "", "name": "Димасик"}
 
 
 def _db() -> sqlite3.Connection:
