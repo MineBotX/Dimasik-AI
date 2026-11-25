@@ -801,7 +801,7 @@ class DimasikApp:
         win.configure(bg=self.BG)
         tk.Label(win, text="API-генератор", bg=self.BG, fg=self.TEXT,
                  font=("Segoe UI", 20, "bold")).pack(anchor="w", padx=20, pady=(18, 4))
-        tk.Label(win, text="Опиши назначение API. Granite подготовит системный промт, который будет применяться к каждому запросу.",
+        tk.Label(win, text="Опиши назначение API и выбери, какая модель будет отвечать на запросы.",
                  bg=self.BG, fg=self.MUTED, wraplength=690, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
         tk.Label(win, text="Для чего нужен API?", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20)
         purpose = tk.Text(win, height=5, bg=self.PANEL, fg=self.TEXT, insertbackground=self.TEXT,
@@ -809,13 +809,24 @@ class DimasikApp:
         purpose.pack(fill="x", padx=20, pady=7)
         purpose.insert("1.0", "Например: анализировать отзывы, находить жалобы и возвращать JSON-отчёт.")
         tk.Label(win, text="Нейросеть", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20, pady=(6, 2))
-        model = ttk.Combobox(win, values=["Granite 4.2 3B — локальная языковая модель"],
-                             state="readonly", font=("Segoe UI", 10))
+        model = ttk.Combobox(
+            win,
+            values=[
+                "Все вместе — DimaCore + Granite",
+                "Granite 4.2 3B",
+                "DimaCore 2.0 — экспериментальное ядро",
+            ],
+            state="readonly", font=("Segoe UI", 10)
+        )
         model.pack(fill="x", padx=20)
         model.current(0)
-        tk.Label(win, text="DimaCore 2.0 пока не предлагается: это экспериментальная модель, не рассчитанная на произвольные API-задачи.",
-                 bg=self.BG, fg=self.MUTED, wraplength=690, justify="left",
-                 font=("Segoe UI", 8)).pack(anchor="w", padx=20, pady=7)
+        tk.Label(
+            win,
+            text="«Все вместе»: DimaCore предлагает черновик, Granite проверяет его и формирует итог. "
+                 "DimaCore отдельно требует обученный файл brain/dimasik_brain.npz.",
+            bg=self.BG, fg=self.MUTED, wraplength=690, justify="left",
+            font=("Segoe UI", 8)
+        ).pack(anchor="w", padx=20, pady=7)
         tk.Label(win, text="Системный промт, созданный Димасиком", bg=self.BG, fg=self.TEXT).pack(anchor="w", padx=20)
         prompt_box = tk.Text(win, height=9, bg=self.PANEL, fg=self.GREEN, relief="flat",
                              wrap="word", font=("Cascadia Code", 9), padx=9, pady=8)
@@ -843,7 +854,12 @@ class DimasikApp:
                         "Определи роль, задачу, входные данные, алгоритм, формат ответа, ошибки и ограничения. "
                         "Не приписывай API несуществующие инструменты или доступы. Не исполняй входной код. "
                         "Верни только промт.\n\nЗАДАЧА:\n" + task, max_tokens=1200)
-                    task_api_server.save_profile("Специализированный API", task, generated)
+                    selected = {
+                        "Все вместе — DimaCore + Granite": "all",
+                        "Granite 4.2 3B": "granite",
+                        "DimaCore 2.0 — экспериментальное ядро": "dimacore",
+                    }.get(model.get(), "all")
+                    task_api_server.save_profile("Специализированный API", task, generated, model=selected)
                     if self.api_http_server is None:
                         self.api_http_server = task_api_server.start_server("127.0.0.1", 8787)
                         self.api_thread = threading.Thread(target=self.api_http_server.serve_forever, daemon=True)
