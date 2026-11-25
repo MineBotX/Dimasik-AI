@@ -27,8 +27,10 @@ from urllib.parse import urlparse
 # Support both `python -m assistant.api_server` and PyInstaller's script-directory imports.
 try:
     from .local_coder import LocalCoder
+    from .brain import DimasikBrain
 except ImportError:
     from local_coder import LocalCoder
+    from brain import DimasikBrain
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "brain" / "api_keys.sqlite3"
@@ -36,7 +38,9 @@ PROFILE_PATH = ROOT / "brain" / "api_profile.json"
 MAX_BODY = 64 * 1024
 DEFAULT_RPM = 30
 MODEL_ID = "dimasik"
+MODEL_ALIASES = {"dimasik": "all", "all": "all", "granite": "granite", "dimacore": "dimacore"}
 _coder = LocalCoder(ROOT)
+_brain = DimasikBrain()
 _rate_lock = threading.Lock()
 _rate_events: dict[str, list[float]] = {}
 # A single local Granite instance: reject excess work rather than queueing HTTP threads.
@@ -53,30 +57,31 @@ def _connection():
         conn.close()
 
 
-def save_profile(name: str, purpose: str, task_prompt: str, model: str = MODEL_ID) -> None:
-    """Persist a task-specific system prompt locally."""
-    if model != MODEL_ID:
-        raise ValueError("Поддерживается только Granite через dimasik.")
+def save_profile(name: str, purpose: str, task_prompt: str, model: str = "all") -> None:
+    """Persist a task-specific system prompt and inference mode locally."""
+    if model not in MODEL_ALIASES.values():
+        raise ValueError("Неизвестный режим модели API.")
     name, purpose, task_prompt = str(name).strip()[:80], str(purpose).strip(), str(task_prompt).strip()
     if not purpose or len(purpose) > 4000 or not task_prompt or len(task_prompt) > 12000:
         raise ValueError("Описание задачи или системный промт пусты либо слишком длинные.")
     PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = PROFILE_PATH.with_suffix(".tmp")
     temporary.write_text(json.dumps({"name": name or "Мой API", "purpose": purpose,
-        "task_prompt": task_prompt, "model": MODEL_ID}, ensure_ascii=False, indent=2), encoding="utf-8")
+        "task_prompt": task_prompt, "model": model}, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(PROFILE_PATH)
 
 
 def load_profile() -> dict:
     try:
         data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and data.get("model") == MODEL_ID:
+        if isinstance(data, dict) and data.get("model") in MODEL_ALIASES.values():
             prompt = data.get("task_prompt")
             if isinstance(prompt, str) and prompt.strip():
-                return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80]}
+                return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80],
+                        "model": data["model"]}
     except (OSError, ValueError, json.JSONDecodeError):
         pass
-    return {"task_prompt": "", "name": "Димасик"}
+    return {"task_prompt": "", "name": "Димасик", "model": "all"}
 
 
 def _db() -> sqlite3.Connection:
@@ -204,8 +209,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             self._send(200, {
                 "object": "list",
-                "data": [{"id": MODEL_ID, "object": "model", "created": 0,
-                          "owned_by": "dimasik"}],
+                "data": [
+                    {"id": "dimacore", "object": "model", "created": 0, "owned_by": "dimasik"},
+                    {"id": "granite", "object": "model", "created": 0, "owned_by": "ibm-granite"},
+                    {"id": "all", "object": "model", "created": 0, "owned_by": "dimasik"},
+                    {"id": MODEL_ID, "object": "model", "created": 0, "owned_by": "dimasik"},
+                ],
             })
             return
         self._error(404, "Endpoint not found.", "not_found")
@@ -244,8 +253,10 @@ class ApiHandler(BaseHTTPRequestHandler):
         if payload.get("stream", False) is not False:
             self._error(400, "Streaming is not supported; set stream=false.", "unsupported_parameter")
             return
-        if payload.get("model", MODEL_ID) != MODEL_ID:
-            self._error(404, "Unknown model. Use model=\"dimasik\".", "model_not_found")
+        requested_model = str(payload.get("model", MODEL_ID)).lower()
+        selected_model = MODEL_ALIASES.get(requested_model)
+        if selected_model is None:
+            self._error(404, "Unknown model. Use dimacore, granite, all, or dimasik.", "model_not_found")
             return
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages or len(messages) > 20:
@@ -295,10 +306,30 @@ class ApiHandler(BaseHTTPRequestHandler):
         started = time.monotonic()
         try:
             profile = load_profile()
-            answer = _coder.generate_chat(
-                last_user, conversation=history, max_tokens=max_tokens,
-                task_prompt=profile["task_prompt"],
-            )
+            mode = selected_model or profile.get("model", "all")
+            task_prompt = profile["task_prompt"]
+            if mode == "dimacore":
+                if not _brain.ready:
+                    raise RuntimeError("DimaCore не обучен или файл brain/dimasik_brain.npz отсутствует.")
+                answer = _brain.answer(last_user, max_tokens=min(128, max_tokens))
+            elif mode == "granite":
+                answer = _coder.generate_chat(
+                    last_user, conversation=history, max_tokens=max_tokens,
+                    task_prompt=task_prompt,
+                )
+            else:
+                if not _brain.ready:
+                    raise RuntimeError("Для режима all нужно обученное ядро DimaCore.")
+                core_hint = _brain.answer(last_user, max_tokens=48)
+                combined_prompt = (
+                    "Дополнительный черновик экспериментального ядра DimaCore (может содержать ошибки; "
+                    "проверяй его и не копируй вслепую):\\n" + core_hint +
+                    "\\n\\nСформируй точный, полезный итоговый ответ на исходный запрос."
+                )
+                answer = _coder.generate_chat(
+                    last_user, conversation=history + [{"role": "assistant", "content": combined_prompt}],
+                    max_tokens=max_tokens, task_prompt=task_prompt,
+                )
         except Exception as exc:
             self.log_error("Model request failed: %s", type(exc).__name__)
             self._error(503, "Dimasik's local model is unavailable. Check that Granite is installed.",
@@ -311,7 +342,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             "id": "chatcmpl-" + uuid.uuid4().hex,
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": MODEL_ID,
+            "model": selected_model,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": answer},
                          "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
