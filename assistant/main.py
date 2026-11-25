@@ -531,7 +531,7 @@ class DimasikApp:
     TEXT = "#eaf8ff"
     MUTED = "#86a9bf"
     GREEN = "#45f0c0"
-    BORDER = "#17435a""
+    BORDER = "#17435a"
 
     def __init__(self, root):
         self.root = root
