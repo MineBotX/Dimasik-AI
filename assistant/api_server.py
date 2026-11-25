@@ -75,15 +75,20 @@ def save_profile(name: str, purpose: str, task_prompt: str, model: str = "auto")
 def load_profile() -> dict:
     try:
         data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and data.get("model") in MODEL_ALIASES.values():
+        if isinstance(data, dict):
             prompt = data.get("task_prompt")
             if isinstance(prompt, str) and prompt.strip():
-                return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80],
-                        **({**({"model": data["model"]} if data.get("model") else {})} if data.get("model") else {})}
+                profile = {
+                    "task_prompt": prompt[:12000],
+                    "name": str(data.get("name", "Мой API"))[:80],
+                }
+                model = data.get("model")
+                if model in MODEL_ALIASES.values() and model != "auto":
+                    profile["model"] = model
+                return profile
     except (OSError, ValueError, json.JSONDecodeError):
         pass
     return {"task_prompt": "", "name": "Димасик"}
-
 
 def _db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
