@@ -194,6 +194,19 @@ class ApiHandler(BaseHTTPRequestHandler):
         # Avoid logging request headers or credentials.
         sys.stderr.write("[DimasikAPI] " + (fmt % args) + "\n")
 
+    def _cors_headers(self):
+        origin = self.headers.get("Origin", "")
+        allowed = {"http://localhost:5500", "http://127.0.0.1:5500"}
+        if origin not in allowed:
+            return {}
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Vary": "Origin",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "600",
+        }
+
     def _send(self, status: int, payload: dict, headers: dict | None = None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -201,7 +214,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        for name, value in (headers or {}).items():
+        response_headers = self._cors_headers()
+        response_headers.update(headers or {})
+        for name, value in response_headers.items():
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
@@ -223,6 +238,28 @@ class ApiHandler(BaseHTTPRequestHandler):
             )
             return None
         return key
+
+    def do_OPTIONS(self):
+        path = urlparse(self.path).path
+        requested_method = self.headers.get("Access-Control-Request-Method", "").upper()
+        requested_headers = {
+            item.strip().lower()
+            for item in self.headers.get("Access-Control-Request-Headers", "").split(",")
+            if item.strip()
+        }
+        if (path not in ("/v1/chat/completions", "/v1/models")
+                or not self._cors_headers()
+                or requested_method not in ("GET", "POST")
+                or not requested_headers.issubset({"authorization", "content-type"})):
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(204)
+        for name, value in self._cors_headers().items():
+            self.send_header(name, value)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path
