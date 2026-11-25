@@ -57,6 +57,8 @@ def validate_license(path: str | Path | None = None) -> dict[str, Any]:
             raise LicenseError("Обнаружен перевод системных часов назад.")
     except FileNotFoundError:
         previous = now
+    except (OSError, ValueError) as exc:
+        raise LicenseError("Не удалось проверить локальное состояние лицензии.") from exc
     STATE.write_text(str(max(now, previous)), encoding="ascii")
     return payload
 
