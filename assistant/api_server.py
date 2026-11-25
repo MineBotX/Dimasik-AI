@@ -79,7 +79,7 @@ def load_profile() -> dict:
             prompt = data.get("task_prompt")
             if isinstance(prompt, str) and prompt.strip():
                 return {"task_prompt": prompt[:12000], "name": str(data.get("name", "Мой API"))[:80],
-                        **({"model": data["model"]} if data.get("model") else {})}
+                        **({**({"model": data["model"]} if data.get("model") else {})} if data.get("model") else {})}
     except (OSError, ValueError, json.JSONDecodeError):
         pass
     return {"task_prompt": "", "name": "Димасик"}
