@@ -28,9 +28,11 @@ from urllib.parse import urlparse
 try:
     from .local_coder import LocalCoder
     from .brain import DimasikBrain
+    from .licensing import feature_allowed
 except ImportError:
     from local_coder import LocalCoder
     from brain import DimasikBrain
+    from licensing import feature_allowed
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "brain" / "api_keys.sqlite3"
@@ -267,6 +269,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._send(200, {"status": "ok", "service": "dimasik-api"})
             return
         if path == "/v1/models":
+            if not feature_allowed("api"):
+                self._error(403, "The API feature requires an Ultimate license.", "license_required")
+                return
             if self._authorized() is None:
                 return
             self._send(200, {
@@ -284,6 +289,9 @@ class ApiHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if urlparse(self.path).path != "/v1/chat/completions":
             self._error(404, "Endpoint not found.", "not_found")
+            return
+        if not feature_allowed("api"):
+            self._error(403, "The API feature requires an Ultimate license.", "license_required")
             return
         key = self._authorized()
         if key is None:
@@ -319,6 +327,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         selected_model = MODEL_ALIASES.get(requested_model) if requested_model else None
         if requested_model and selected_model is None:
             self._error(404, "Unknown model. Use dimacore, granite, all, or dimasik.", "model_not_found")
+            return
+        if selected_model in ("granite", "auto") and not feature_allowed("granite"):
+            self._error(403, "Granite inference requires a Pro or Ultimate license.", "license_required")
             return
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages or len(messages) > 20:
