@@ -524,14 +524,14 @@ def execute_command(command):
 
 
 class DimasikApp:
-    BG = "#0a1020"
-    PANEL = "#121c30"
-    PANEL2 = "#1a2942"
-    ACCENT = "#82aaff"
-    TEXT = "#f1f5ff"
-    MUTED = "#93a5bf"
-    GREEN = "#65dfb5"
-    BORDER = "#273956"
+    BG = "#050b16"
+    PANEL = "#0b1728"
+    PANEL2 = "#10243a"
+    ACCENT = "#42d9ff"
+    TEXT = "#eaf8ff"
+    MUTED = "#86a9bf"
+    GREEN = "#45f0c0"
+    BORDER = "#17435a""
 
     def __init__(self, root):
         self.root = root
@@ -563,32 +563,32 @@ class DimasikApp:
         self.root.configure(bg=self.BG)
 
         # Верхняя панель
-        header = tk.Frame(self.root, bg="#101a2a", height=64,
-                          highlightthickness=1, highlightbackground=self.BORDER)
+        header = tk.Frame(self.root, bg="#071626", height=64,
+                          highlightthickness=1, highlightbackground="#17617a")
         header.pack(fill="x")
         header.pack_propagate(False)
-        tk.Label(header, text="◉", bg="#101a2a", fg="#35baff",
+        tk.Label(header, text="◉", bg="#071626", fg=self.ACCENT,
                  font=("Segoe UI", 25, "bold")).pack(side="left", padx=(20, 10))
-        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#101a2a",
+        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#071626",
                                    fg=self.TEXT, font=("Segoe UI", 19, "bold"))
         self.name_label.pack(side="left")
-        tk.Label(header, text="ЛОКАЛЬНЫЙ ИИ-ПОМОЩНИК", bg="#101a2a",
+        tk.Label(header, text="J.A.R.V.I.S. STYLE  •  ЛОКАЛЬНЫЙ ИИ", bg="#071626",
                  fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left", padx=14)
-        self.status = tk.Label(header, text="●  Запуск...", bg="#101a2a",
+        self.status = tk.Label(header, text="●  ЗАПУСК СИСТЕМЫ...", bg="#071626",
                                fg=self.ACCENT, font=("Segoe UI", 10, "bold"))
         self.status.pack(side="right", padx=(8, 22))
         self.mic_btn = RoundedButton(
             header, text="🎙  МИКРОФОН", command=self.toggle_listening,
             bg=self.GREEN, fg="#071522", activebackground="#83ecc8",
             font=("Segoe UI", 9, "bold"), padx=14, pady=8, radius=12,
-            border="#73e8c1", canvas_bg="#101a2a",
+            border="#73e8c1", canvas_bg="#071626",
         )
         self.mic_btn.pack(side="right", padx=10, pady=8)
 
         # Основная трёхколоночная область
         shell = tk.Frame(self.root, bg=self.BG)
         shell.pack(fill="both", expand=True)
-        sidebar = tk.Frame(shell, bg="#101a2a", width=238,
+        sidebar = tk.Frame(shell, bg="#071626", width=238,
                            highlightthickness=1, highlightbackground=self.BORDER)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
@@ -598,15 +598,15 @@ class DimasikApp:
         rightbar.pack(side="right", fill="y", padx=(0, 18), pady=18)
         rightbar.pack_propagate(False)
 
-        tk.Label(sidebar, text="◈  ДИМАСИК", bg="#101a2a", fg=self.TEXT,
+        tk.Label(sidebar, text="◈  D I M A S I K", bg="#071626", fg=self.ACCENT,
                  font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=22, pady=(24, 24))
 
         def nav_button(label, command, active=False, accent=None):
-            color = accent or ("#183b63" if active else "#101a2a")
+            color = accent or ("#12364a" if active else "#071626")
             fg = "#ffffff" if active or accent else "#b8c9e2"
             button = tk.Button(
                 sidebar, text=label, command=command, anchor="w",
-                bg=color, fg=fg, activebackground="#233a5c",
+                bg=color, fg=fg, activebackground="#12445b",
                 activeforeground="#ffffff", relief="flat", bd=0,
                 font=("Segoe UI", 10, "bold" if active or accent else "normal"),
                 padx=18, pady=12, cursor="hand2",
@@ -622,7 +622,7 @@ class DimasikApp:
         nav_button("⌕   Поиск", lambda: self._quick_prompt("Найди в интернете "))
         nav_button("▤   Файлы", self.attach_file)
         nav_button("▧   Генерация изображений", self.image_action)
-        nav_button("⚡   API-генератор", self.open_api_generator, accent="#a34cff")
+        nav_button("⚡   API-генератор", self.open_api_generator, accent="#087e9e")
         nav_button("⚙   Настройки", self.open_settings)
         nav_button("⌘   GitHub", self.open_github)
         nav_button("✉   Почта", self.open_email)
@@ -651,7 +651,7 @@ class DimasikApp:
             cards.grid_columnconfigure(column, weight=1, uniform="feature")
 
         def feature_card(row, column, title, description, command, color, api=False):
-            panel_color = "#17243b" if not api else "#211a42"
+            panel_color = "#0b2033" if not api else "#102b42"
             border_color = color if api else self.BORDER
             panel = RoundedPanel(
                 cards, fill=panel_color, background=self.BG, radius=16,
@@ -686,7 +686,7 @@ class DimasikApp:
         feature_card(1, 1, "▧  Изображения", "Создавай картинки по описанию",
                      self.image_action, "#df4c9b")
         feature_card(1, 2, "⚡  API-генератор", "Создавай API под свои задачи",
-                     self.open_api_generator, "#a34cff", api=True)
+                     self.open_api_generator, "#13bde5", api=True)
 
         # Диалоговая область
         chat_card = RoundedPanel(
@@ -770,6 +770,36 @@ class DimasikApp:
         info_panel("▤  ПАМЯТЬ", "Локальная", "История и рабочие данные хранятся на этом компьютере")
         info_panel("⚡  API", "API-генератор",
                    "Создавай специализированный API под собственную задачу", "#c49aff")
+
+        # Быстрые действия: загрузка локальной модели и проверка обновлений.
+        control_panel = RoundedPanel(
+            rightbar, fill="#0b2033", background=self.BG, radius=15,
+            padding=12, border="#17617a",
+        )
+        control_panel.pack(fill="x", pady=(0, 12))
+        tk.Label(
+            control_panel.content, text="⌁  ЦЕНТР УПРАВЛЕНИЯ",
+            bg="#0b2033", fg=self.ACCENT,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(anchor="w", pady=(0, 8))
+        self.coder_btn = RoundedButton(
+            control_panel.content,
+            text=("✓  GRANITE УСТАНОВЛЕН" if CODE_WRITER.model_installed else "↓  СКАЧАТЬ GRANITE 4.2 3B"),
+            command=self.download_coder_model,
+            bg="#0c7893" if not CODE_WRITER.model_installed else "#12634f",
+            fg="#f0fcff", activebackground="#1599b7",
+            font=("Segoe UI", 8, "bold"), padx=9, pady=8, radius=9,
+            border="#24b9d8", canvas_bg="#0b2033",
+        )
+        self.coder_btn.pack(fill="x", pady=(0, 7))
+        self.update_btn = RoundedButton(
+            control_panel.content, text="↻  ПРОВЕРИТЬ ОБНОВЛЕНИЯ",
+            command=self.check_updates,
+            bg="#102b42", fg=self.TEXT, activebackground="#17445f",
+            font=("Segoe UI", 8, "bold"), padx=9, pady=8, radius=9,
+            border="#17617a", canvas_bg="#0b2033",
+        )
+        self.update_btn.pack(fill="x")
         tk.Label(
             self.root,
             text="Димасик  •  Vosk  •  DimaCore 2.0  •  Granite  •  Stable Diffusion",
