@@ -867,6 +867,30 @@ class DimasikApp:
         key_box = tk.Entry(win, bg=self.PANEL, fg=self.TEXT, relief="flat", state="readonly")
         key_box.pack(fill="x", padx=20, pady=5)
 
+        def create_key_now():
+            try:
+                if self.api_http_server is None:
+                    self.api_http_server = task_api_server.start_server("127.0.0.1", 8787)
+                    self.api_thread = threading.Thread(
+                        target=self.api_http_server.serve_forever, daemon=True
+                    )
+                    self.api_thread.start()
+                token = task_api_server.create_key("Личный API-ключ", rpm=30)
+                key_box.configure(state="normal")
+                key_box.delete(0, "end")
+                key_box.insert(0, token)
+                key_box.configure(state="readonly")
+                endpoint = "http://127.0.0.1:%d/v1/chat/completions" % self.api_http_server.server_port
+                status.configure(text="Ключ создан. API: " + endpoint, fg=self.GREEN)
+            except Exception as exc:
+                messagebox.showerror("API-ключ", str(exc), parent=win)
+
+        tk.Button(
+            win, text="СОЗДАТЬ ОБЫЧНЫЙ API-КЛЮЧ", command=create_key_now,
+            bg=self.PANEL2, fg=self.ACCENT, activebackground=self.PANEL,
+            relief="flat", padx=12, pady=8, font=("Segoe UI", 9, "bold")
+        ).pack(anchor="w", padx=20, pady=(4, 8))
+
         def create_api():
             task = purpose.get("1.0", "end").strip()
             if not task or task.startswith("Например:") or len(task) > 4000:
