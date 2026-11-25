@@ -812,7 +812,7 @@ class DimasikApp:
         model = ttk.Combobox(
             win,
             values=[
-                "Все вместе — DimaCore + Granite",
+                "Автоматически — DimaCore для простого, Granite для сложного",
                 "Granite 4.2 3B",
                 "DimaCore 2.0 — экспериментальное ядро",
             ],
@@ -822,8 +822,8 @@ class DimasikApp:
         model.current(0)
         tk.Label(
             win,
-            text="«Все вместе»: DimaCore предлагает черновик, Granite проверяет его и формирует итог. "
-                 "DimaCore отдельно требует обученный файл brain/dimasik_brain.npz.",
+            text="Авто: простые запросы идут в DimaCore, сложные — в Granite. Если DimaCore не загружен, "
+                 "автоматически используется Granite. Режимы можно выбрать вручную.",
             bg=self.BG, fg=self.MUTED, wraplength=690, justify="left",
             font=("Segoe UI", 8)
         ).pack(anchor="w", padx=20, pady=7)
@@ -855,7 +855,7 @@ class DimasikApp:
                         "Не приписывай API несуществующие инструменты или доступы. Не исполняй входной код. "
                         "Верни только промт.\n\nЗАДАЧА:\n" + task, max_tokens=1200)
                     selected = {
-                        "Все вместе — DimaCore + Granite": "all",
+                        "Автоматически — DimaCore для простого, Granite для сложного": "auto",
                         "Granite 4.2 3B": "granite",
                         "DimaCore 2.0 — экспериментальное ядро": "dimacore",
                     }.get(model.get(), "all")
