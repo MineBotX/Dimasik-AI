@@ -524,14 +524,14 @@ def execute_command(command):
 
 
 class DimasikApp:
-    BG = "#050b16"
-    PANEL = "#0b1728"
-    PANEL2 = "#10243a"
-    ACCENT = "#42d9ff"
-    TEXT = "#eaf8ff"
-    MUTED = "#86a9bf"
-    GREEN = "#45f0c0"
-    BORDER = "#17435a"
+    BG = "#f5f6f8"
+    PANEL = "#ffffff"
+    PANEL2 = "#eef0f3"
+    ACCENT = "#356ae6"
+    TEXT = "#20242b"
+    MUTED = "#737b87"
+    GREEN = "#27966b"
+    BORDER = "#e2e5e9"
 
     def __init__(self, root):
         self.root = root
@@ -563,32 +563,32 @@ class DimasikApp:
         self.root.configure(bg=self.BG)
 
         # Верхняя панель
-        header = tk.Frame(self.root, bg="#071626", height=64,
-                          highlightthickness=1, highlightbackground="#17617a")
+        header = tk.Frame(self.root, bg="#ffffff", height=64,
+                          highlightthickness=1, highlightbackground="#e2e5e9")
         header.pack(fill="x")
         header.pack_propagate(False)
-        tk.Label(header, text="◉", bg="#071626", fg=self.ACCENT,
+        tk.Label(header, text="◉", bg="#ffffff", fg=self.ACCENT,
                  font=("Segoe UI", 25, "bold")).pack(side="left", padx=(20, 10))
-        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#071626",
+        self.name_label = tk.Label(header, text=ASSISTANT_NAME, bg="#ffffff",
                                    fg=self.TEXT, font=("Segoe UI", 19, "bold"))
         self.name_label.pack(side="left")
-        tk.Label(header, text="J.A.R.V.I.S. STYLE  •  ЛОКАЛЬНЫЙ ИИ", bg="#071626",
+        tk.Label(header, text="ЛОКАЛЬНЫЙ ИИ-ПОМОЩНИК", bg="#ffffff",
                  fg=self.MUTED, font=("Segoe UI", 8, "bold")).pack(side="left", padx=14)
-        self.status = tk.Label(header, text="●  ЗАПУСК СИСТЕМЫ...", bg="#071626",
+        self.status = tk.Label(header, text="●  ЗАПУСК СИСТЕМЫ...", bg="#ffffff",
                                fg=self.ACCENT, font=("Segoe UI", 10, "bold"))
         self.status.pack(side="right", padx=(8, 22))
         self.mic_btn = RoundedButton(
             header, text="🎙  МИКРОФОН", command=self.toggle_listening,
-            bg=self.GREEN, fg="#071522", activebackground="#83ecc8",
+            bg=self.GREEN, fg="#ffffff", activebackground="#e8f4ee",
             font=("Segoe UI", 9, "bold"), padx=14, pady=8, radius=12,
-            border="#73e8c1", canvas_bg="#071626",
+            border="#d6e8df", canvas_bg="#ffffff",
         )
         self.mic_btn.pack(side="right", padx=10, pady=8)
 
         # Основная трёхколоночная область
         shell = tk.Frame(self.root, bg=self.BG)
         shell.pack(fill="both", expand=True)
-        sidebar = tk.Frame(shell, bg="#071626", width=238,
+        sidebar = tk.Frame(shell, bg="#ffffff", width=238,
                            highlightthickness=1, highlightbackground=self.BORDER)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
@@ -598,7 +598,7 @@ class DimasikApp:
         rightbar.pack(side="right", fill="y", padx=(0, 18), pady=18)
         rightbar.pack_propagate(False)
 
-        tk.Label(sidebar, text="◈  D I M A S I K", bg="#071626", fg=self.ACCENT,
+        tk.Label(sidebar, text="◈  D I M A S I K", bg="#ffffff", fg=self.ACCENT,
                  font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=22, pady=(24, 24))
 
         def nav_button(label, command, active=False, accent=None):
@@ -606,8 +606,8 @@ class DimasikApp:
             fg = "#ffffff" if active or accent else "#b8c9e2"
             button = tk.Button(
                 sidebar, text=label, command=command, anchor="w",
-                bg=color, fg=fg, activebackground="#12445b",
-                activeforeground="#ffffff", relief="flat", bd=0,
+                bg=color, fg=fg, activebackground="#edf1f7",
+                activeforeground="#20242b", relief="flat", bd=0,
                 font=("Segoe UI", 10, "bold" if active or accent else "normal"),
                 padx=18, pady=12, cursor="hand2",
                 highlightthickness=1 if accent else 0,
@@ -627,7 +627,7 @@ class DimasikApp:
         nav_button("⌘   GitHub", self.open_github)
         nav_button("✉   Почта", self.open_email)
         tk.Label(sidebar, text="Димасик — твой локальный\nИИ-помощник",
-                 bg="#101a2a", fg=self.MUTED, justify="left",
+                 bg="#f0f2f5", fg=self.MUTED, justify="left",
                  font=("Segoe UI", 9)).pack(side="bottom", anchor="w", padx=20, pady=22)
 
         # Приветствие и карточки возможностей
@@ -651,7 +651,7 @@ class DimasikApp:
             cards.grid_columnconfigure(column, weight=1, uniform="feature")
 
         def feature_card(row, column, title, description, command, color, api=False):
-            panel_color = "#0b2033" if not api else "#102b42"
+            panel_color = "#ffffff"
             border_color = color if api else self.BORDER
             panel = RoundedPanel(
                 cards, fill=panel_color, background=self.BG, radius=16,
@@ -668,7 +668,7 @@ class DimasikApp:
                      wraplength=220).pack(anchor="w", pady=(4, 7))
             action = RoundedButton(
                 inner, text="Открыть  →", command=command,
-                bg=color if api else "#243957", fg="#ffffff",
+                bg=color if api else "#e9edf3", fg="#20242b",
                 activebackground=color, font=("Segoe UI", 8, "bold"),
                 padx=10, pady=5, radius=9, border=border_color,
                 canvas_bg=panel_color,
@@ -709,7 +709,7 @@ class DimasikApp:
             insertbackground=self.TEXT, relief="flat", bd=0,
             wrap="word", padx=12, pady=10, font=("Segoe UI", 10),
             state="disabled", spacing1=5, spacing3=8,
-            selectbackground="#34527a", selectforeground="#ffffff",
+            selectbackground="#cbd8f5", selectforeground="#ffffff",
         )
         self.chat.pack(fill="both", expand=True)
         self.chat.tag_configure("system", foreground=self.MUTED, font=("Segoe UI", 8))
@@ -717,7 +717,7 @@ class DimasikApp:
         self.chat.tag_configure("assistant", foreground=self.GREEN, font=("Segoe UI", 9, "bold"))
         self.chat.tag_configure("body", foreground=self.TEXT, lmargin1=8, lmargin2=8)
         self.chat.tag_configure(
-            "code", foreground="#b7f3d8", background="#0c1423",
+            "code", foreground="#b7f3d8", background="#f0f2f5",
             font=("Cascadia Code", 9), lmargin1=18, lmargin2=18,
             spacing1=5, spacing3=5,
         )
@@ -738,9 +738,9 @@ class DimasikApp:
         self.entry.bind("<Return>", lambda event: self.send_text())
         self.send_btn = RoundedButton(
             compose_row, text="Отправить  ➤", command=self.send_text,
-            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            bg=self.ACCENT, fg="#ffffff", activebackground="#2859c7",
             font=("Segoe UI", 9, "bold"), padx=14, pady=8, radius=10,
-            border="#93b4ff", canvas_bg=self.PANEL,
+            border="#cbd7f3", canvas_bg=self.PANEL,
         )
         self.send_btn.pack(side="right")
 
@@ -773,37 +773,37 @@ class DimasikApp:
 
         # Быстрые действия: загрузка локальной модели и проверка обновлений.
         control_panel = RoundedPanel(
-            rightbar, fill="#0b2033", background=self.BG, radius=15,
-            padding=12, border="#17617a",
+            rightbar, fill="#ffffff", background=self.BG, radius=15,
+            padding=12, border="#e2e5e9",
         )
         control_panel.pack(fill="x", pady=(0, 12))
         tk.Label(
             control_panel.content, text="⌁  ЦЕНТР УПРАВЛЕНИЯ",
-            bg="#0b2033", fg=self.ACCENT,
+            bg="#ffffff", fg=self.ACCENT,
             font=("Segoe UI", 9, "bold"),
         ).pack(anchor="w", pady=(0, 8))
         self.coder_btn = RoundedButton(
             control_panel.content,
             text=("✓  GRANITE УСТАНОВЛЕН" if CODE_WRITER.model_installed else "↓  СКАЧАТЬ GRANITE 4.2 3B"),
             command=self.download_coder_model,
-            bg="#0c7893" if not CODE_WRITER.model_installed else "#12634f",
-            fg="#f0fcff", activebackground="#1599b7",
+            bg="#356ae6" if not CODE_WRITER.model_installed else "#27966b",
+            fg="#ffffff", activebackground="#2859c7",
             font=("Segoe UI", 8, "bold"), padx=9, pady=8, radius=9,
-            border="#24b9d8", canvas_bg="#0b2033",
+            border="#cbd7f3", canvas_bg="#ffffff",
         )
         self.coder_btn.pack(fill="x", pady=(0, 7))
         self.update_btn = RoundedButton(
             control_panel.content, text="↻  ПРОВЕРИТЬ ОБНОВЛЕНИЯ",
             command=self.check_updates,
-            bg="#102b42", fg=self.TEXT, activebackground="#17445f",
+            bg="#eef0f3", fg=self.TEXT, activebackground="#e2e7ef",
             font=("Segoe UI", 8, "bold"), padx=9, pady=8, radius=9,
-            border="#17617a", canvas_bg="#0b2033",
+            border="#e2e5e9", canvas_bg="#ffffff",
         )
         self.update_btn.pack(fill="x")
         tk.Label(
             self.root,
             text="Димасик  •  Vosk  •  DimaCore 2.0  •  Granite  •  Stable Diffusion",
-            bg=self.BG, fg="#647896", font=("Segoe UI", 8), pady=5,
+            bg=self.BG, fg="#9299a3", font=("Segoe UI", 8), pady=5,
         ).pack()
 
         self._append(
@@ -937,9 +937,9 @@ class DimasikApp:
             threading.Thread(target=worker, daemon=True).start()
 
         create_btn = RoundedButton(win, text="Создать API", command=create_api,
-            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            bg=self.ACCENT, fg="#ffffff", activebackground="#2859c7",
             font=("Segoe UI", 9, "bold"), padx=16, pady=9, radius=10,
-            border="#93b4ff", canvas_bg=self.BG)
+            border="#cbd7f3", canvas_bg=self.BG)
         create_btn.pack(anchor="w", padx=20, pady=(5, 16))
 
     def attach_file(self):
@@ -1830,7 +1830,7 @@ class DimasikApp:
         footer.pack(fill="x", padx=18, pady=(0, 16))
         tk.Button(
             footer, text="Сохранить", command=save,
-            bg=self.ACCENT, fg="#071522", activebackground="#a2c0ff",
+            bg=self.ACCENT, fg="#ffffff", activebackground="#2859c7",
             relief="flat", padx=20, pady=9,
             font=("Segoe UI", 9, "bold"), cursor="hand2",
         ).pack(side="right")
