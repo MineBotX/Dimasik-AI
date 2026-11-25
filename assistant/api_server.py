@@ -38,7 +38,7 @@ PROFILE_PATH = ROOT / "brain" / "api_profile.json"
 MAX_BODY = 64 * 1024
 DEFAULT_RPM = 30
 MODEL_ID = "dimasik"
-MODEL_ALIASES = {"dimasik": "all", "all": "all", "granite": "granite", "dimacore": "dimacore"}
+MODEL_ALIASES = {"dimasik": "auto", "auto": "auto", "all": "auto", "granite": "granite", "dimacore": "dimacore"}
 _coder = LocalCoder(ROOT)
 _brain = DimasikBrain()
 _rate_lock = threading.Lock()
@@ -81,7 +81,7 @@ def load_profile() -> dict:
                         "model": data["model"]}
     except (OSError, ValueError, json.JSONDecodeError):
         pass
-    return {"task_prompt": "", "name": "Димасик", "model": "all"}
+    return {"task_prompt": "", "name": "Димасик", "model": "auto"}
 
 
 def _db() -> sqlite3.Connection:
@@ -148,6 +148,25 @@ def _authenticate(handler):
     if row is None:
         return None
     return dict(row)
+
+
+def _is_complex_request(text: str) -> bool:
+    """Conservative router: keep short everyday prompts on DimaCore, send demanding work to Granite."""
+    value = str(text).strip().lower()
+    words = value.split()
+    complex_markers = (
+        "объясни подробно", "проанализируй", "сравни", "составь план", "напиши код",
+        "исправь код", "программ", "разработ", "документ", "реферат", "эссе",
+        "пошагово", "несколько вариантов", "рассчитай", "докажи", "исследуй",
+        "таблиц", "json", "sql", "python", "алгоритм", "архитектур", "проект",
+    )
+    if len(value) > 220 or len(words) > 35:
+        return True
+    if any(marker in value for marker in complex_markers):
+        return True
+    if value.count("?") > 1 or any(token in value for token in (" и затем ", " после этого ", "сначала ", "потом ")):
+        return True
+    return False
 
 
 def _allow_request(key: dict) -> bool:
@@ -308,6 +327,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             profile = load_profile()
             mode = selected_model or profile.get("model", "all")
             task_prompt = profile["task_prompt"]
+            if mode == "auto":
+                mode = "granite" if _is_complex_request(last_user) else "dimacore"
+                if mode == "dimacore" and not _brain.ready:
+                    mode = "granite"
             if mode == "dimacore":
                 if not _brain.ready:
                     raise RuntimeError("DimaCore не обучен или файл brain/dimasik_brain.npz отсутствует.")
@@ -342,7 +365,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             "id": "chatcmpl-" + uuid.uuid4().hex,
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": selected_model,
+            "model": mode,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": answer},
                          "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
